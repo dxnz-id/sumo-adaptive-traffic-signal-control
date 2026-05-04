@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    connections.con.xml
+    Koneksi antar lajur di simpang tengah.
+    Setiap ruas masuk dapat terhubung ke 3 arah keluar:
+      - Lurus (straight)
+      - Belok kiri (left)
+      - Belok kanan (right)
+
+    Lajur 0 = lajur kiri (dekat median)
+    Lajur 1 = lajur kanan (dekat trotoar)
+-->
+<connections>
+    <!-- ============================================================
+         DARI UTARA (north_in) → kendaraan bergerak ke selatan
+         Lurus  : → south_out
+         Belok kanan : → west_out  (kanan dari perspektif pengemudi)
+         Belok kiri  : → east_out  (kiri dari perspektif pengemudi)
+    ============================================================ -->
+    <connection from="north_in" to="south_out" fromLane="0" toLane="0"/>
+    <connection from="north_in" to="south_out" fromLane="1" toLane="1"/>
+    <connection from="north_in" to="east_out"  fromLane="0" toLane="0"/>
+    <connection from="north_in" to="west_out"  fromLane="1" toLane="1"/>
+
+    <!-- ============================================================
+         DARI SELATAN (south_in) → kendaraan bergerak ke utara
+         Lurus  : → north_out
+         Belok kanan : → east_out
+         Belok kiri  : → west_out
+    ============================================================ -->
+    <connection from="south_in" to="north_out" fromLane="0" toLane="0"/>
+    <connection from="south_in" to="north_out" fromLane="1" toLane="1"/>
+    <connection from="south_in" to="west_out"  fromLane="0" toLane="0"/>
+    <connection from="south_in" to="east_out"  fromLane="1" toLane="1"/>
+
+    <!-- ============================================================
+         DARI BARAT (west_in) → kendaraan bergerak ke timur
+         Lurus  : → east_out
+         Belok kanan : → south_out
+         Belok kiri  : → north_out
+    ============================================================ -->
+    <connection from="west_in" to="east_out"  fromLane="0" toLane="0"/>
+    <connection from="west_in" to="east_out"  fromLane="1" toLane="1"/>
+    <connection from="west_in" to="north_out" fromLane="0" toLane="0"/>
+    <connection from="west_in" to="south_out" fromLane="1" toLane="1"/>
+
+    <!-- ============================================================
+         DARI TIMUR (east_in) → kendaraan bergerak ke barat
+         Lurus  : → west_out
+         Belok kanan : → north_out
+         Belok kiri  : → south_out
+    ============================================================ -->
+    <connection from="east_in" to="west_out"  fromLane="0" toLane="0"/>
+    <connection from="east_in" to="west_out"  fromLane="1" toLane="1"/>
+    <connection from="east_in" to="south_out" fromLane="0" toLane="0"/>
+    <connection from="east_in" to="north_out" fromLane="1" toLane="1"/>
+</connections>

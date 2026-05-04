@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    edges.edg.xml
+    Definisi ruas jalan untuk simulasi perempatan 4 arah.
+    Setiap arah memiliki 2 ruas: masuk (in) dan keluar (out), masing-masing 2 lajur.
+    Kecepatan: 50 km/h = 13.89 m/s
+    spreadType="right" → kendaraan Indonesia mengemudi di kiri (right-hand drive)
+-->
+<edges>
+    <!-- === UTARA === -->
+    <!-- Dari utara menuju simpang (kendaraan bergerak ke selatan) -->
+    <edge id="north_in"  from="north"  to="center" numLanes="2" speed="13.89" spreadType="right"
+          name="Jl. Utara - Masuk"/>
+    <!-- Dari simpang menuju utara (kendaraan bergerak ke utara) -->
+    <edge id="north_out" from="center" to="north"  numLanes="2" speed="13.89" spreadType="right"
+          name="Jl. Utara - Keluar"/>
+
+    <!-- === SELATAN === -->
+    <edge id="south_in"  from="south"  to="center" numLanes="2" speed="13.89" spreadType="right"
+          name="Jl. Selatan - Masuk"/>
+    <edge id="south_out" from="center" to="south"  numLanes="2" speed="13.89" spreadType="right"
+          name="Jl. Selatan - Keluar"/>
+
+    <!-- === BARAT === -->
+    <edge id="west_in"   from="west"   to="center" numLanes="2" speed="13.89" spreadType="right"
+          name="Jl. Barat - Masuk"/>
+    <edge id="west_out"  from="center" to="west"   numLanes="2" speed="13.89" spreadType="right"
+          name="Jl. Barat - Keluar"/>
+
+    <!-- === TIMUR === -->
+    <edge id="east_in"   from="east"   to="center" numLanes="2" speed="13.89" spreadType="right"
+          name="Jl. Timur - Masuk"/>
+    <edge id="east_out"  from="center" to="east"   numLanes="2" speed="13.89" spreadType="right"
+          name="Jl. Timur - Keluar"/>
+</edges>
