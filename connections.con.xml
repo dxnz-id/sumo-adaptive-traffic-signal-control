@@ -1,57 +1,70 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!--
-    connections.con.xml
-    Koneksi antar lajur di simpang tengah.
-    Setiap ruas masuk dapat terhubung ke 3 arah keluar:
-      - Lurus (straight)
-      - Belok kiri (left)
-      - Belok kanan (right)
-
-    Lajur 0 = lajur kiri (dekat median)
-    Lajur 1 = lajur kanan (dekat trotoar)
--->
 <connections>
-    <!-- ============================================================
-         DARI UTARA (north_in) → kendaraan bergerak ke selatan
-         Lurus  : → south_out
-         Belok kanan : → west_out  (kanan dari perspektif pengemudi)
-         Belok kiri  : → east_out  (kiri dari perspektif pengemudi)
-    ============================================================ -->
-    <connection from="north_in" to="south_out" fromLane="0" toLane="0"/>
-    <connection from="north_in" to="south_out" fromLane="1" toLane="1"/>
-    <connection from="north_in" to="east_out"  fromLane="0" toLane="0"/>
-    <connection from="north_in" to="west_out"  fromLane="1" toLane="1"/>
+    <!-- 
+        PENJELASAN LAJUR (LHT/Indonesia):
+        - Lajur 0: Lajur paling kanan (dekat median) -> Lurus & Kanan
+        - Lajur 1: Lajur tengah -> Lurus
+        - Lajur 2: Lajur paling kiri (dekat trotoar) -> Belok Kiri (Slip Road)
+    -->
 
-    <!-- ============================================================
-         DARI SELATAN (south_in) → kendaraan bergerak ke utara
-         Lurus  : → north_out
-         Belok kanan : → east_out
-         Belok kiri  : → west_out
-    ============================================================ -->
-    <connection from="south_in" to="north_out" fromLane="0" toLane="0"/>
-    <connection from="south_in" to="north_out" fromLane="1" toLane="1"/>
-    <connection from="south_in" to="west_out"  fromLane="0" toLane="0"/>
-    <connection from="south_in" to="east_out"  fromLane="1" toLane="1"/>
+    <!-- === UTARA === -->
+    <!-- Split -->
+    <connection from="north_in_1" to="slip_ne"     fromLane="2" toLane="0" uncontrolled="true"/>
+    <connection from="north_in_1" to="north_in_2"  fromLane="1" toLane="1"/>
+    <connection from="north_in_1" to="north_in_2"  fromLane="0" toLane="0"/>
+    <!-- Merge -->
+    <connection from="north_out_1" to="north_out_2" fromLane="1" toLane="1"/>
+    <connection from="north_out_1" to="north_out_2" fromLane="0" toLane="0"/>
+    <connection from="slip_wn"     to="north_out_2" fromLane="0" toLane="2" uncontrolled="true"/>
 
-    <!-- ============================================================
-         DARI BARAT (west_in) → kendaraan bergerak ke timur
-         Lurus  : → east_out
-         Belok kanan : → south_out
-         Belok kiri  : → north_out
-    ============================================================ -->
-    <connection from="west_in" to="east_out"  fromLane="0" toLane="0"/>
-    <connection from="west_in" to="east_out"  fromLane="1" toLane="1"/>
-    <connection from="west_in" to="north_out" fromLane="0" toLane="0"/>
-    <connection from="west_in" to="south_out" fromLane="1" toLane="1"/>
+    <!-- === SELATAN === -->
+    <!-- Split -->
+    <connection from="south_in_1" to="slip_sw"     fromLane="2" toLane="0" uncontrolled="true"/>
+    <connection from="south_in_1" to="south_in_2"  fromLane="1" toLane="1"/>
+    <connection from="south_in_1" to="south_in_2"  fromLane="0" toLane="0"/>
+    <!-- Merge -->
+    <connection from="south_out_1" to="south_out_2" fromLane="1" toLane="1"/>
+    <connection from="south_out_1" to="south_out_2" fromLane="0" toLane="0"/>
+    <connection from="slip_es"     to="south_out_2" fromLane="0" toLane="2" uncontrolled="true"/>
 
-    <!-- ============================================================
-         DARI TIMUR (east_in) → kendaraan bergerak ke barat
-         Lurus  : → west_out
-         Belok kanan : → north_out
-         Belok kiri  : → south_out
-    ============================================================ -->
-    <connection from="east_in" to="west_out"  fromLane="0" toLane="0"/>
-    <connection from="east_in" to="west_out"  fromLane="1" toLane="1"/>
-    <connection from="east_in" to="south_out" fromLane="0" toLane="0"/>
-    <connection from="east_in" to="north_out" fromLane="1" toLane="1"/>
+    <!-- === TIMUR === -->
+    <!-- Split -->
+    <connection from="east_in_1" to="slip_es"     fromLane="2" toLane="0" uncontrolled="true"/>
+    <connection from="east_in_1" to="east_in_2"  fromLane="1" toLane="1"/>
+    <connection from="east_in_1" to="east_in_2"  fromLane="0" toLane="0"/>
+    <!-- Merge -->
+    <connection from="east_out_1" to="east_out_2" fromLane="1" toLane="1"/>
+    <connection from="east_out_1" to="east_out_2" fromLane="0" toLane="0"/>
+    <connection from="slip_ne"     to="east_out_2" fromLane="0" toLane="2" uncontrolled="true"/>
+
+    <!-- === BARAT === -->
+    <!-- Split -->
+    <connection from="west_in_1" to="slip_wn"     fromLane="2" toLane="0" uncontrolled="true"/>
+    <connection from="west_in_1" to="west_in_2"  fromLane="1" toLane="1"/>
+    <connection from="west_in_1" to="west_in_2"  fromLane="0" toLane="0"/>
+    <!-- Merge -->
+    <connection from="west_out_1" to="west_out_2" fromLane="1" toLane="1"/>
+    <connection from="west_out_1" to="west_out_2" fromLane="0" toLane="0"/>
+    <connection from="slip_sw"     to="west_out_2" fromLane="0" toLane="2" uncontrolled="true"/>
+
+    <!-- === CENTER (Lampu Merah: Hanya Lurus & Kanan) === -->
+    <!-- Utara -->
+    <connection from="north_in_2" to="south_out_1" fromLane="1" toLane="1"/> <!-- Lurus -->
+    <connection from="north_in_2" to="south_out_1" fromLane="0" toLane="0"/> <!-- Lurus -->
+    <connection from="north_in_2" to="west_out_1"  fromLane="0" toLane="0"/> <!-- Belok Kanan (dari lajur median) -->
+
+    <!-- Selatan -->
+    <connection from="south_in_2" to="north_out_1" fromLane="1" toLane="1"/>
+    <connection from="south_in_2" to="north_out_1" fromLane="0" toLane="0"/>
+    <connection from="south_in_2" to="east_out_1"  fromLane="0" toLane="0"/>
+
+    <!-- Timur -->
+    <connection from="east_in_2"  to="west_out_1"  fromLane="1" toLane="1"/>
+    <connection from="east_in_2"  to="west_out_1"  fromLane="0" toLane="0"/>
+    <connection from="east_in_2"  to="north_out_1" fromLane="0" toLane="0"/>
+
+    <!-- Barat -->
+    <connection from="west_in_2"  to="east_out_1"  fromLane="1" toLane="1"/>
+    <connection from="west_in_2"  to="east_out_1"  fromLane="0" toLane="0"/>
+    <connection from="west_in_2"  to="south_out_1" fromLane="0" toLane="0"/>
 </connections>

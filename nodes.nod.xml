@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!--
-    nodes.nod.xml
-    Definisi node (titik persimpangan) untuk simulasi perempatan 4 arah
-    - center : simpang utama (traffic_light)
-    - north/south/east/west : ujung jalan (dead_end)
--->
 <nodes>
-    <!-- Simpang utama - lampu merah -->
+    <!-- Simpang utama -->
     <node id="center" x="0"    y="0"    type="traffic_light"/>
 
-    <!-- Ujung-ujung jalan di setiap arah (400 m dari simpang) -->
+    <!-- Titik split/merge untuk slip road (60m dari pusat) -->
+    <node id="north_junc" x="0"    y="60"   type="priority"/>
+    <node id="south_junc" x="0"    y="-60"  type="priority"/>
+    <node id="west_junc"  x="-60"   y="0"    type="priority"/>
+    <node id="east_junc"  x="60"    y="0"    type="priority"/>
+
+    <!-- Ujung-ujung jalan -->
     <node id="north"  x="0"    y="400"  type="dead_end"/>
     <node id="south"  x="0"    y="-400" type="dead_end"/>
     <node id="west"   x="-400" y="0"    type="dead_end"/>

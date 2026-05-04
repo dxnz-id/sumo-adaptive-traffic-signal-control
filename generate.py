@@ -97,27 +97,28 @@ TURN_RATIO = {
     "east":  (0.50, 0.25, 0.25),
 }
 
-# Rute berdasarkan arah dan manuver: (edge_masuk, edge_keluar)
+# Rute berdasarkan arah dan manuver
+# Belok kiri sekarang melewati slip road (bypass simpang utama)
 ROUTES = {
     "north": {
-        "straight": ("north_in", "south_out"),
-        "left":     ("north_in", "east_out"),
-        "right":    ("north_in", "west_out"),
+        "straight": ("north_in_1 north_in_2", "south_out_1 south_out_2"),
+        "right":    ("north_in_1 north_in_2", "west_out_1 west_out_2"),
+        "left":     ("north_in_1", "slip_ne east_out_2"),
     },
     "south": {
-        "straight": ("south_in", "north_out"),
-        "left":     ("south_in", "west_out"),
-        "right":    ("south_in", "east_out"),
+        "straight": ("south_in_1 south_in_2", "north_out_1 north_out_2"),
+        "right":    ("south_in_1 south_in_2", "east_out_1 east_out_2"),
+        "left":     ("south_in_1", "slip_sw west_out_2"),
     },
     "west": {
-        "straight": ("west_in", "east_out"),
-        "left":     ("west_in", "north_out"),
-        "right":    ("west_in", "south_out"),
+        "straight": ("west_in_1 west_in_2", "east_out_1 east_out_2"),
+        "right":    ("west_in_1 west_in_2", "north_out_1 north_out_2"),
+        "left":     ("west_in_1", "slip_wn north_out_2"),
     },
     "east": {
-        "straight": ("east_in", "west_out"),
-        "left":     ("east_in", "south_out"),
-        "right":    ("east_in", "north_out"),
+        "straight": ("east_in_1 east_in_2", "west_out_1 west_out_2"),
+        "right":    ("east_in_1 east_in_2", "south_out_1 south_out_2"),
+        "left":     ("east_in_1", "slip_es south_out_2"),
     },
 }
 
@@ -176,7 +177,7 @@ def build_network():
         "--tls.red.time",          "2",
         "--no-turnarounds",        "true",
         "--junctions.corner-detail", "5",
-        "--lefthand",              "false",
+        "--lefthand",              "true",
         "--geometry.remove",       "true",
         "--verbose",               "false",
     ]
