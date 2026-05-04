@@ -1,5 +1,7 @@
 # Simulasi Perempatan Lalu Lintas SUMO (Indonesia Style)
 
+**99.99999% kode ditulis oleh kecerdasan buatan, harap gunakan dengan hati hati!**
+
 Proyek ini adalah simulasi lalu lintas perempatan 4 arah menggunakan **SUMO (Simulation of Urban MObility)**. Simulasi ini dikonfigurasi khusus mengikuti standar jalanan di Indonesia dengan sistem lajur kiri dan fitur *slip road*.
 
 ## Fitur Utama
