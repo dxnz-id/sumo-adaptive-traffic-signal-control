@@ -97,28 +97,48 @@ def get_crowded_from_cli():
     print("          Kosongkan (langsung ENTER) untuk NORMAL.")
     
     ans = input("\nMasukkan pilihan: ").lower().replace(" ", "")
-    if not ans:
-        print("  >> Mode: NORMAL (Semua arah lurus)")
-        return []
     
     mapping = {'n': 'north', 's': 'south', 'w': 'west', 'e': 'east'}
     selected = []
     
-    parts = ans.split(",")
-    for p in parts:
-        # Cek shortcut (n, s, w, e)
-        if p in mapping:
-            selected.append(mapping[p])
-        # Cek nama lengkap (north, south, etc)
-        elif p in mapping.values():
-            selected.append(p)
+    if ans:
+        parts = ans.split(",")
+        for p in parts:
+            if p in mapping:
+                selected.append(mapping[p])
+            elif p in mapping.values():
+                selected.append(p)
             
     if selected:
-        print(f"  >> Mode RAMAI pada arah: {', '.join([s.capitalize() for s in selected])}")
+        print(f"  >> Mode Macet: RAMAI ({', '.join([s.capitalize() for s in selected])})")
     else:
-        print("  >> Pilihan tidak dikenali, menggunakan mode NORMAL.")
+        print("  >> Mode Macet: NORMAL")
         
-    return selected
+    # 1. Opsi Mode Lampu Merah
+    print("\n" + "-" * 40)
+    print("Pilih Mode Lampu Merah:")
+    print(" [1] Ganda  (Dua arah berlawanan hijau bareng)")
+    print(" [2] Tunggal (Satu per satu arah hijau)")
+    
+    tls_mode = input("\nPilih [1/2] (Default 1): ")
+    tls_layout = "opposites" if tls_mode != "2" else "incoming"
+    
+    # 2. Opsi Ketertiban
+    print("\n" + "-" * 40)
+    print("Pilih Tingkat Ketertiban Pengendara:")
+    print(" [1] Tertib   (Jaga jarak, kecepatan stabil - Default)")
+    print(" [2] Semrawut (Ugal-ugalan, uap/sigma tinggi)")
+    
+    ord_mode = input("\nPilih [1/2] (Default 1): ")
+    orderliness = "orderly" if ord_mode != "2" else "chaotic"
+    
+    # Ringkasan
+    print("\n" + "=" * 40)
+    print(f" >> Lampu: {'TUNGGAL' if tls_layout == 'incoming' else 'GANDA'}")
+    print(f" >> Driver: {orderliness.upper()}")
+    print("=" * 40 + "\n")
+        
+    return selected, tls_layout, orderliness
 
 # Proporsi manuver per arah: (lurus, kiri, kanan)
 TURN_RATIO = {
@@ -143,12 +163,12 @@ ROUTES = {
     },
     "west": {
         "straight": ("west_in_1 west_in_2", "east_out_1 east_out_2"),
-        "right":    ("west_in_1 west_in_2", "north_out_1 north_out_2"),
+        "right":    ("west_in_1 west_in_2", "south_out_1 south_out_2"),  # LHT: west → east → belok kanan = selatan
         "left":     ("west_in_1", "slip_wn north_out_2"),
     },
     "east": {
         "straight": ("east_in_1 east_in_2", "west_out_1 west_out_2"),
-        "right":    ("east_in_1 east_in_2", "south_out_1 south_out_2"),
+        "right":    ("east_in_1 east_in_2", "north_out_1 north_out_2"),  # LHT: east → west → belok kanan = utara
         "left":     ("east_in_1", "slip_es south_out_2"),
     },
 }
@@ -193,7 +213,7 @@ def write_xml(path: str, content: str):
 # ---------------------------------------------------------
 #  STEP 1 : Buat net.net.xml via netconvert
 # ---------------------------------------------------------
-def build_network():
+def build_network(tls_layout="opposites"):
     print("\n[1/3] Membuat jaringan jalan dengan netconvert ...")
     netconvert_bin = find_exe("netconvert.exe")
     cmd = [
@@ -203,6 +223,7 @@ def build_network():
         "--connection-files",      os.path.join(SRC_DIR, "connections.con.xml"),
         "--output-file",           os.path.join(BUILD_DIR, "net.net.xml"),
         "--tls.default-type",      "static",
+        "--tls.layout",            tls_layout,
         "--tls.green.time",        "35",
         "--tls.yellow.time",       "4",
         "--tls.red.time",          "2",
@@ -222,7 +243,7 @@ def build_network():
 # ---------------------------------------------------------
 #  STEP 2 : Buat routes.rou.xml
 # ---------------------------------------------------------
-def build_routes():
+def build_routes(orderliness="orderly"):
     print("\n[2/3] Membuat rute kendaraan dinamis ...")
 
     root = ET.Element("routes")
@@ -232,13 +253,18 @@ def build_routes():
 
     # -- Definisi vType --
     for vtype_id, accel, decel, length, maxspeed, sigma, color, _ in VEHICLE_TYPES:
+        # Penyesuaian ketertiban (Sigma & Tau)
+        actual_sigma = sigma if orderliness == "chaotic" else 0.1
+        actual_tau   = 1.0 if orderliness == "orderly" else 0.5
+
         vtype = ET.SubElement(root, "vType")
         vtype.set("id",          vtype_id)
         vtype.set("accel",       str(accel))
         vtype.set("decel",       str(decel))
         vtype.set("length",      str(length))
         vtype.set("maxSpeed",    str(maxspeed))
-        vtype.set("sigma",       str(sigma))
+        vtype.set("sigma",       str(actual_sigma))
+        vtype.set("tau",         str(actual_tau))
         vtype.set("color",       color)
         vtype.set("guiShape",    GUI_SHAPE[vtype_id])
         vtype.set("speedFactor", "normc(1.0,0.1,0.8,1.2)")
@@ -373,12 +399,12 @@ if __name__ == "__main__":
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     os.makedirs(BUILD_DIR, exist_ok=True)
 
-    # 1. Pilih kemacetan via CLI
-    crowded_list = get_crowded_from_cli()
+    # 1. Pilih kemacetan, mode lampu, & ketertiban via CLI
+    crowded_list, tls_layout, orderliness = get_crowded_from_cli()
     set_traffic_volumes(crowded_list)
 
     # 2. Jalankan proses simulasi
-    build_network()
-    build_routes()
+    build_network(tls_layout)
+    build_routes(orderliness)
     build_config()
     run_sumo_gui()
