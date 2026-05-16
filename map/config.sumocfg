@@ -25,15 +25,16 @@
     </random_number>
 
     <gui_only>
+        <gui-settings-file value="../src/view.view.xml"/>
         <start value="true"/>
         <quit-on-end value="false"/>
         <tracker-interval value="0.1"/>
     </gui_only>
 
     <output>
-        <summary-output value="output/summary.xml"/>
-        <tripinfo-output value="output/tripinfo.xml"/>
-        <queue-output value="output/queue.xml"/>
+        <summary-output value="../output/summary.xml"/>
+        <tripinfo-output value="../output/tripinfo.xml"/>
+        <queue-output value="../output/queue.xml"/>
     </output>
 
 </configuration>

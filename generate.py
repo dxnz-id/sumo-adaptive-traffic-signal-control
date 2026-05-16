@@ -58,6 +58,8 @@ def find_exe(name: str) -> str:
 # ---------------------------------------------------------
 SIM_DURATION = 3600   # detik (1 jam simulasi)
 RANDOM_SEED  = 42
+BUILD_DIR    = "map"  # Folder untuk file simulasi
+SRC_DIR      = "src"  # Folder untuk file sumber XML
 random.seed(RANDOM_SEED)
 
 # Volume kendaraan per arah per interval (kend/jam)
@@ -167,10 +169,10 @@ def build_network():
     netconvert_bin = find_exe("netconvert.exe")
     cmd = [
         netconvert_bin,
-        "--node-files",            "nodes.nod.xml",
-        "--edge-files",            "edges.edg.xml",
-        "--connection-files",      "connections.con.xml",
-        "--output-file",           "net.net.xml",
+        "--node-files",            os.path.join(SRC_DIR, "nodes.nod.xml"),
+        "--edge-files",            os.path.join(SRC_DIR, "edges.edg.xml"),
+        "--connection-files",      os.path.join(SRC_DIR, "connections.con.xml"),
+        "--output-file",           os.path.join(BUILD_DIR, "net.net.xml"),
         "--tls.default-type",      "static",
         "--tls.green.time",        "35",
         "--tls.yellow.time",       "4",
@@ -257,7 +259,7 @@ def build_routes():
         vehicle.set("departSpeed", "random")
         veh_id += 1
 
-    write_xml("routes.rou.xml", prettify(root))
+    write_xml(os.path.join(BUILD_DIR, "routes.rou.xml"), prettify(root))
     ok(f"Total kendaraan: {veh_id}")
 
 
@@ -293,23 +295,25 @@ def build_config():
     </random_number>
 
     <gui_only>
+        <gui-settings-file value="../{SRC_DIR}/view.view.xml"/>
         <start value="true"/>
         <quit-on-end value="false"/>
         <tracker-interval value="0.1"/>
     </gui_only>
 
     <output>
-        <summary-output value="output/summary.xml"/>
-        <tripinfo-output value="output/tripinfo.xml"/>
-        <queue-output value="output/queue.xml"/>
+        <summary-output value="../output/summary.xml"/>
+        <tripinfo-output value="../output/tripinfo.xml"/>
+        <queue-output value="../output/queue.xml"/>
     </output>
 
 </configuration>
 """
     os.makedirs("output", exist_ok=True)
-    with open("config.sumocfg", "w", encoding="utf-8") as f:
+    config_path = os.path.join(BUILD_DIR, "config.sumocfg")
+    with open(config_path, "w", encoding="utf-8") as f:
         f.write(content)
-    ok("config.sumocfg berhasil dibuat")
+    ok(f"{config_path} berhasil dibuat")
     ok("folder output/ disiapkan")
 
 
@@ -319,7 +323,8 @@ def build_config():
 def run_sumo_gui():
     print("\n[3/3] Menjalankan sumo-gui ...")
     sumo_gui_bin = find_exe("sumo-gui.exe")
-    cmd = [sumo_gui_bin, "-c", "config.sumocfg", "--delay", "50"]
+    config_path = os.path.join(BUILD_DIR, "config.sumocfg")
+    cmd = [sumo_gui_bin, "-c", config_path, "--delay", "50"]
     print(f"  -> {' '.join(cmd)}\n")
     subprocess.Popen(cmd)
     ok("sumo-gui diluncurkan!")
@@ -337,6 +342,7 @@ if __name__ == "__main__":
     print("=" * 50)
 
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
+    os.makedirs(BUILD_DIR, exist_ok=True)
 
     build_network()
     build_routes()
