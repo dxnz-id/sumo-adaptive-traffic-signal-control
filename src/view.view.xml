@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <viewsettings>
     <scheme name="real world">
-        <background backgroundColor="55,80,55" showGrid="0"/>
+        <background backgroundColor="255,255,255" showGrid="0"/>
         <edges laneShowBorders="1" showLinkDecals="1"
                edgeParam="" vehicleParam="" vehicleScaleParam=""
                edgeData="" vehicleData="" vehicleScaleData="">

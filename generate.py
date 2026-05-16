@@ -62,34 +62,63 @@ BUILD_DIR    = "map"  # Folder untuk file simulasi
 SRC_DIR      = "src"  # Folder untuk file sumber XML
 random.seed(RANDOM_SEED)
 
-# Volume kendaraan per arah per interval (kend/jam)
-# Format: {arah: [(mulai_det, selesai_det, volume_per_jam), ...]}
+# Volume Dasar (Akan diupdate via GUI)
 TRAFFIC_VOLUME = {
-    "north": [
-        (   0,  900, 180),   # normal pagi
-        ( 900, 1800, 400),   # jam sibuk pagi
-        (1800, 2700, 220),   # normal siang
-        (2700, 3600, 350),   # jam sibuk sore
-    ],
-    "south": [
-        (   0,  900, 160),
-        ( 900, 1800, 350),
-        (1800, 2700, 200),
-        (2700, 3600, 380),
-    ],
-    "west": [
-        (   0,  900, 120),
-        ( 900, 1800, 280),
-        (1800, 2700, 150),
-        (2700, 3600, 300),
-    ],
-    "east": [
-        (   0,  900, 130),
-        ( 900, 1800, 260),
-        (1800, 2700, 160),
-        (2700, 3600, 290),
-    ],
+    "north": [], "south": [], "west": [], "east": []
 }
+
+def set_traffic_volumes(crowded_directions):
+    """Menentukan volume berdasarkan pilihan GUI."""
+    normal_vol = [
+        (0, 900, 180), (900, 1800, 350), (1800, 2700, 220), (2700, 3600, 320)
+    ]
+    crowded_vol = [
+        (0, 900, 800), (900, 1800, 1500), (1800, 2700, 900), (2700, 3600, 1400)
+    ]
+    
+    for direction in ["north", "south", "west", "east"]:
+        if direction in crowded_directions:
+            TRAFFIC_VOLUME[direction] = crowded_vol
+        else:
+            TRAFFIC_VOLUME[direction] = normal_vol
+
+def get_crowded_from_cli():
+    """Mengambil input kemacetan dari terminal."""
+    print("\n" + "="*40)
+    print("      PENGATURAN KEMACETAN")
+    print("="*40)
+    print("Pilih arah yang ingin dibuat SANGAT RAMAI:")
+    print(" [n] North / Utara")
+    print(" [s] South / Selatan")
+    print(" [w] West  / Barat")
+    print(" [e] East  / Timur")
+    print("-" * 40)
+    print("Petunjuk: Ketik hurufnya saja (misal: 'n' atau 's,e')")
+    print("          Kosongkan (langsung ENTER) untuk NORMAL.")
+    
+    ans = input("\nMasukkan pilihan: ").lower().replace(" ", "")
+    if not ans:
+        print("  >> Mode: NORMAL (Semua arah lurus)")
+        return []
+    
+    mapping = {'n': 'north', 's': 'south', 'w': 'west', 'e': 'east'}
+    selected = []
+    
+    parts = ans.split(",")
+    for p in parts:
+        # Cek shortcut (n, s, w, e)
+        if p in mapping:
+            selected.append(mapping[p])
+        # Cek nama lengkap (north, south, etc)
+        elif p in mapping.values():
+            selected.append(p)
+            
+    if selected:
+        print(f"  >> Mode RAMAI pada arah: {', '.join([s.capitalize() for s in selected])}")
+    else:
+        print("  >> Pilihan tidak dikenali, menggunakan mode NORMAL.")
+        
+    return selected
 
 # Proporsi manuver per arah: (lurus, kiri, kanan)
 TURN_RATIO = {
@@ -344,6 +373,11 @@ if __name__ == "__main__":
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     os.makedirs(BUILD_DIR, exist_ok=True)
 
+    # 1. Pilih kemacetan via CLI
+    crowded_list = get_crowded_from_cli()
+    set_traffic_volumes(crowded_list)
+
+    # 2. Jalankan proses simulasi
     build_network()
     build_routes()
     build_config()
