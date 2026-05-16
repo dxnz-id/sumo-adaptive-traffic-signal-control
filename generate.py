@@ -117,11 +117,11 @@ def get_crowded_from_cli():
     # 1. Opsi Mode Lampu Merah
     print("\n" + "-" * 40)
     print("Pilih Mode Lampu Merah:")
-    print(" [1] Ganda  (Dua arah berlawanan hijau bareng)")
-    print(" [2] Tunggal (Satu per satu arah hijau)")
+    print(" [1] Tunggal (Satu per satu arah hijau)")
+    print(" [2] Ganda   (Dua arah berlawanan hijau bareng)")
     
     tls_mode = input("\nPilih [1/2] (Default 1): ")
-    tls_layout = "opposites" if tls_mode != "2" else "incoming"
+    tls_layout = "incoming" if tls_mode != "2" else "opposites"
     
     # 2. Opsi Ketertiban
     print("\n" + "-" * 40)
@@ -392,19 +392,23 @@ def run_sumo_gui():
 #  MAIN
 # ---------------------------------------------------------
 if __name__ == "__main__":
-    print("=" * 50)
-    print("  Simulasi Perempatan 4 Arah - SUMO")
-    print("=" * 50)
+    try:
+        print("=" * 50)
+        print("  Simulasi Perempatan 4 Arah - SUMO")
+        print("=" * 50)
 
-    os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    os.makedirs(BUILD_DIR, exist_ok=True)
+        os.chdir(os.path.dirname(os.path.abspath(__file__)))
+        os.makedirs(BUILD_DIR, exist_ok=True)
 
-    # 1. Pilih kemacetan, mode lampu, & ketertiban via CLI
-    crowded_list, tls_layout, orderliness = get_crowded_from_cli()
-    set_traffic_volumes(crowded_list)
+        # 1. Pilih kemacetan, mode lampu, & ketertiban via CLI
+        crowded_list, tls_layout, orderliness = get_crowded_from_cli()
+        set_traffic_volumes(crowded_list)
 
-    # 2. Jalankan proses simulasi
-    build_network(tls_layout)
-    build_routes(orderliness)
-    build_config()
-    run_sumo_gui()
+        # 2. Jalankan proses simulasi
+        build_network(tls_layout)
+        build_routes(orderliness)
+        build_config()
+        run_sumo_gui()
+    except KeyboardInterrupt:
+        print("\n\n[INFO] Simulasi dibatalkan oleh pengguna (Ctrl+C).")
+        sys.exit(0)
