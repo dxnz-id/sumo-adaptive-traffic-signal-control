@@ -26,6 +26,13 @@ import subprocess
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 
+# Setup jalur TraCI sebelum import
+if 'SUMO_HOME' in os.environ:
+    sys.path.append(os.path.join(os.environ['SUMO_HOME'], 'tools'))
+else:
+    sys.path.append(os.path.join(r"C:\Program Files (x86)\Eclipse\Sumo", 'tools'))
+import traci
+
 # Force UTF-8 output supaya tidak error di terminal Windows
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -376,16 +383,120 @@ def build_config():
 #  STEP 4 : Jalankan sumo-gui
 # ---------------------------------------------------------
 def run_sumo_gui():
-    print("\n[3/3] Menjalankan sumo-gui ...")
+    print("\n[3/3] Menjalankan sumo-gui via TraCI ...")
     sumo_gui_bin = find_exe("sumo-gui.exe")
     config_path = os.path.join(BUILD_DIR, "config.sumocfg")
-    cmd = [sumo_gui_bin, "-c", config_path, "--delay", "50"]
+    
+    # Jalankan TraCI
+    cmd = [sumo_gui_bin, "-c", config_path, "--delay", "50", "--start"]
     print(f"  -> {' '.join(cmd)}\n")
-    subprocess.Popen(cmd)
-    ok("sumo-gui diluncurkan!")
+    
+    traci.start(cmd)
+    ok("TraCI dan sumo-gui diluncurkan!")
     print("\n" + "=" * 50)
-    print("  Tekan Play [>] di sumo-gui untuk memulai simulasi")
+    print("  Menjalankan Simulasi dengan Timer...")
     print("=" * 50)
+    
+    # Dapatkan posisi pusat simpang yang sebenarnya (setelah offset di netconvert)
+    try:
+        cx, cy = traci.junction.getPosition("center")
+    except:
+        cx, cy = 400, 400 # fallback jika getPosition gagal
+        
+    # Buat 4 POI transparan untuk menampilkan text Timer di GUI
+    # Posisi POI disesuaikan dengan 4 lajur sebelum simpang
+    poi_positions = {
+        "timer_N": (cx + 10, cy + 30),
+        "timer_S": (cx - 10, cy - 30),
+        "timer_W": (cx - 30, cy + 10),
+        "timer_E": (cx + 30, cy - 10)
+    }
+    
+    for poi_id, (px, py) in poi_positions.items():
+        try:
+            # Gunakan warna solid (Hitam) agar teks terlihat. Ukuran diset sekecil mungkin.
+            traci.poi.add(poi_id, x=px, y=py, color=(0,0,0,255), poiType="0", width=0.1, height=0.1)
+        except Exception as e:
+            print(f"Error POI: {e}")
+
+    # Loop simulasi
+    tls_id = "center"
+    
+    # 1. Pemetaan koneksi traffic light ke arah mata angin
+    try:
+        links = traci.trafficlight.getControlledLinks(tls_id)
+        dir_to_indices = {"N": [], "S": [], "E": [], "W": []}
+        for i, conn_list in enumerate(links):
+            if not conn_list: continue
+            from_edge = conn_list[0][0]
+            if "north" in from_edge: dir_to_indices["N"].append(i)
+            elif "south" in from_edge: dir_to_indices["S"].append(i)
+            elif "east" in from_edge: dir_to_indices["E"].append(i)
+            elif "west" in from_edge: dir_to_indices["W"].append(i)
+    except:
+        dir_to_indices = {}
+
+    def get_accurate_timer(direction_name, current_phase_idx, time_rem, phases):
+        """Menghitung waktu tunggu/sisa berdasarkan urutan siklus lampu merah."""
+        indices = dir_to_indices.get(direction_name, [])
+        if not indices: return "0s"
+        
+        current_state = phases[current_phase_idx].state
+        is_green = any(current_state[i] in ('G', 'g') for i in indices)
+        is_yellow = any(current_state[i] in ('y', 'Y') for i in indices)
+        
+        if is_yellow:
+            return f"K:{int(time_rem)}s" # Kuning
+            
+        total_time = time_rem
+        idx = (current_phase_idx + 1) % len(phases)
+        
+        if is_green:
+            # Hitung total waktu tersisa sampai lampu berubah menjadi non-hijau
+            while True:
+                if idx == current_phase_idx: break
+                if any(phases[idx].state[i] in ('G', 'g') for i in indices):
+                    total_time += phases[idx].duration
+                    idx = (idx + 1) % len(phases)
+                else:
+                    break
+            return f"H:{int(total_time)}s"
+        else:
+            # Hitung total waktu tunggu sampai lampu berubah menjadi hijau
+            while True:
+                if idx == current_phase_idx: break
+                if any(phases[idx].state[i] in ('G', 'g') for i in indices):
+                    break
+                else:
+                    total_time += phases[idx].duration
+                    idx = (idx + 1) % len(phases)
+            return f"M:{int(total_time)}s"
+
+    try:
+        while traci.simulation.getMinExpectedNumber() > 0:
+            traci.simulationStep()
+            
+            current_time = traci.simulation.getTime()
+            next_switch = traci.trafficlight.getNextSwitch(tls_id)
+            time_rem_current = max(0, next_switch - current_time)
+            
+            current_phase_idx = traci.trafficlight.getPhase(tls_id)
+            logic = traci.trafficlight.getCompleteRedYellowGreenDefinition(tls_id)[0]
+            phases = logic.phases
+            
+            # Update teks masing-masing POI
+            for poi_id in poi_positions.keys():
+                dir_key = poi_id.split("_")[1] # Ambil huruf N, S, W, atau E
+                timer_text = get_accurate_timer(dir_key, current_phase_idx, time_rem_current, phases)
+                traci.poi.setType(poi_id, timer_text)
+                
+    except traci.exceptions.FatalTraCIError:
+        print("[INFO] Simulasi ditutup oleh pengguna.")
+    
+    try:
+        traci.close()
+    except:
+        pass
 
 
 # ---------------------------------------------------------

@@ -21,5 +21,6 @@
         <junctions drawShape="1" drawCrossingsAndWalkingareas="1"
                    junctionExaggeration="1.0"/>
         <legend showSizeLegend="1" showColorLegend="1"/>
+        <pois poiType_show="1" poiType_size="40.00" poiType_color="0,0,0" poiName_show="1" poiName_size="40.00" poiName_color="0,0,0" />
     </scheme>
 </viewsettings>
