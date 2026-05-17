@@ -28,7 +28,7 @@
     <gui_only>
         <gui-settings-file value="../src/view.view.xml"/>
         <start value="true"/>
-        <quit-on-end value="false"/>
+        <quit-on-end value="true"/>
         <tracker-interval value="0.1"/>
     </gui_only>
 

@@ -25,6 +25,14 @@ import random
 import subprocess
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
+import questionary
+from rich.console import Console
+from rich.panel import Panel
+from rich.prompt import Prompt
+from rich.table import Table
+
+# Inisialisasi console Rich
+console = Console()
 
 # Setup jalur TraCI sebelum import
 if 'SUMO_HOME' in os.environ:
@@ -32,6 +40,7 @@ if 'SUMO_HOME' in os.environ:
 else:
     sys.path.append(os.path.join(r"C:\Program Files (x86)\Eclipse\Sumo", 'tools'))
 import traci
+from src.controller import TimeExtensionController
 
 # Force UTF-8 output supaya tidak error di terminal Windows
 if sys.platform == "win32":
@@ -90,60 +99,101 @@ def set_traffic_volumes(crowded_directions):
             TRAFFIC_VOLUME[direction] = normal_vol
 
 def get_crowded_from_cli():
-    """Mengambil input kemacetan dari terminal."""
-    print("\n" + "="*40)
-    print("      PENGATURAN KEMACETAN")
-    print("="*40)
-    print("Pilih arah yang ingin dibuat SANGAT RAMAI:")
-    print(" [n] North / Utara")
-    print(" [s] South / Selatan")
-    print(" [w] West  / Barat")
-    print(" [e] East  / Timur")
-    print("-" * 40)
-    print("Petunjuk: Ketik hurufnya saja (misal: 'n' atau 's,e')")
-    print("          Kosongkan (langsung ENTER) untuk NORMAL.")
+    """Mengambil input kemacetan dari terminal dengan antarmuka interaktif minimalis."""
+    console.print()
+    console.print("[bold cyan]SUMO ADAPTIVE TRAFFIC LIGHT SIMULATOR[/bold cyan]")
+    console.print("[dim]Sistem Kendali Lampu Lalu Lintas Cerdas Berbasis Time Extension & Phase Skipping[/dim]")
+    console.print()
     
-    ans = input("\nMasukkan pilihan: ").lower().replace(" ", "")
-    
-    mapping = {'n': 'north', 's': 'south', 'w': 'west', 'e': 'east'}
-    selected = []
-    
-    if ans:
-        parts = ans.split(",")
-        for p in parts:
-            if p in mapping:
-                selected.append(mapping[p])
-            elif p in mapping.values():
-                selected.append(p)
-            
-    if selected:
-        print(f"  >> Mode Macet: RAMAI ({', '.join([s.capitalize() for s in selected])})")
-    else:
-        print("  >> Mode Macet: NORMAL")
+    try:
+        # 1. Checkbox Kemacetan menggunakan Questionary (Bisa navigasi panah & spasi!)
+        selected = questionary.checkbox(
+            "Pilih arah yang ingin dibuat sangat ramai (Macet):",
+            choices=[
+                questionary.Choice("Utara (North)", value="north"),
+                questionary.Choice("Selatan (South)", value="south"),
+                questionary.Choice("Barat (West)", value="west"),
+                questionary.Choice("Timur (East)", value="east"),
+            ],
+            instruction="(Gunakan [Spasi] untuk memilih/batal, [Enter] untuk konfirmasi)"
+        ).ask()
         
-    # 1. Opsi Mode Lampu Merah
-    print("\n" + "-" * 40)
-    print("Pilih Mode Lampu Merah:")
-    print(" [1] Tunggal (Satu per satu arah hijau)")
-    print(" [2] Ganda   (Dua arah berlawanan hijau bareng)")
-    
-    tls_mode = input("\nPilih [1/2] (Default 1): ")
-    tls_layout = "incoming" if tls_mode != "2" else "opposites"
-    
-    # 2. Opsi Ketertiban
-    print("\n" + "-" * 40)
-    print("Pilih Tingkat Ketertiban Pengendara:")
-    print(" [1] Tertib   (Jaga jarak, kecepatan stabil - Default)")
-    print(" [2] Semrawut (Ugal-ugalan, uap/sigma tinggi)")
-    
-    ord_mode = input("\nPilih [1/2] (Default 1): ")
-    orderliness = "orderly" if ord_mode != "2" else "chaotic"
-    
-    # Ringkasan
-    print("\n" + "=" * 40)
-    print(f" >> Lampu: {'TUNGGAL' if tls_layout == 'incoming' else 'GANDA'}")
-    print(f" >> Driver: {orderliness.upper()}")
-    print("=" * 40 + "\n")
+        if selected is None:
+            selected = []
+            
+        # 2. Opsi Mode Lampu Merah menggunakan Questionary (Radio input menu!)
+        tls_choice = questionary.select(
+            "Pilih Mode Program Lampu Lalu Lintas:",
+            choices=[
+                questionary.Choice("Tunggal (Satu per satu arah hijau)", value="1"),
+                questionary.Choice("Ganda (Dua arah berlawanan hijau bareng)", value="2"),
+            ]
+        ).ask()
+        
+        tls_layout = "incoming" if tls_choice != "2" else "opposites"
+        
+        # 3. Opsi Ketertiban menggunakan Questionary
+        ord_choice = questionary.select(
+            "Pilih Tingkat Ketertiban Pengendara:",
+            choices=[
+                questionary.Choice("Tertib (Jaga jarak aman, kecepatan konstan)", value="1"),
+                questionary.Choice("Semrawut (Ugal-ugalan, menyalip)", value="2"),
+            ]
+        ).ask()
+        
+        orderliness = "orderly" if ord_choice != "2" else "chaotic"
+        
+    except Exception:
+        # FALLBACK: Jika dijalankan di terminal non-interaktif / IDE output panel yang tidak mendukung console screen buffer
+        console.print("[dim]Note: Terminal non-interaktif terdeteksi, beralih ke input teks standar...[/dim]\n")
+        
+        # 1. Menu Pilihan Kemacetan
+        table = Table(show_header=False, box=None)
+        table.add_row("[bold green][n][/bold green] [cyan]North / Utara[/cyan]", "[bold green][s][/bold green] [cyan]South / Selatan[/cyan]")
+        table.add_row("[bold green][w][/bold green] [cyan]West  / Barat[/cyan]", "[bold green][e][/bold green] [cyan]East  / Timur[/cyan]")
+        
+        console.print(Panel(
+            table,
+            title="PENGATURAN KEMACETAN (PILIH ARAH MACET)",
+            subtitle="Ketik hurufnya saja (misal: 'n' atau 's,e'). Kosongkan jika normal."
+        ))
+        
+        ans = Prompt.ask("Masukkan pilihan arah", default="").lower().replace(" ", "")
+        
+        mapping = {'n': 'north', 's': 'south', 'w': 'west', 'e': 'east'}
+        selected = []
+        
+        if ans:
+            parts = ans.split(",")
+            for p in parts:
+                if p in mapping:
+                    selected.append(mapping[p])
+                elif p in mapping.values():
+                    selected.append(p)
+
+        # 2. Opsi Mode Lampu Merah
+        console.print("\nPilih Mode Program Lampu Lalu Lintas:")
+        console.print(" [1] Tunggal (Satu per satu arah hijau bergantian)")
+        console.print(" [2] Ganda   (Dua arah berlawanan hijau bersamaan)")
+        
+        tls_choice = Prompt.ask("Pilih Mode", choices=["1", "2"], default="1")
+        tls_layout = "incoming" if tls_choice != "2" else "opposites"
+        
+        # 3. Opsi Ketertiban
+        console.print("\nPilih Tingkat Ketertiban Pengendara:")
+        console.print(" [1] Tertib   (Jaga jarak aman, kecepatan konstan)")
+        console.print(" [2] Semrawut (Ugal-ugalan, menyalip)")
+        
+        ord_choice = Prompt.ask("Pilih Perilaku", choices=["1", "2"], default="1")
+        orderliness = "orderly" if ord_choice != "2" else "chaotic"
+
+    # Ringkasan Konfigurasi Sebelum Start
+    console.print()
+    console.print("[bold green]KONFIGURASI SIMULASI:[/bold green]")
+    console.print(f"  • Status Kemacetan : [yellow]{'RAMAI (' + ', '.join([s.capitalize() for s in selected]) + ')' if selected else 'NORMAL'}[/yellow]")
+    console.print(f"  • Mode Siklus TLS  : [cyan]{'TUNGGAL' if tls_layout == 'incoming' else 'GANDA'}[/cyan]")
+    console.print(f"  • Ketertiban Jalan : [green]{orderliness.upper()}[/green]")
+    console.print()
         
     return selected, tls_layout, orderliness
 
@@ -198,7 +248,7 @@ GUI_SHAPE = {
 #  HELPER
 # ---------------------------------------------------------
 def ok(msg: str):
-    print(f"  [OK] {msg}")
+    console.print(f"  [green][OK][/green] {msg}")
 
 
 def prettify(elem) -> str:
@@ -221,7 +271,7 @@ def write_xml(path: str, content: str):
 #  STEP 1 : Buat net.net.xml via netconvert
 # ---------------------------------------------------------
 def build_network(tls_layout="opposites"):
-    print("\n[1/3] Membuat jaringan jalan dengan netconvert ...")
+    console.print("\n[bold cyan][1/3][/bold cyan] Membuat jaringan jalan dengan netconvert...")
     netconvert_bin = find_exe("netconvert.exe")
     cmd = [
         netconvert_bin,
@@ -242,7 +292,7 @@ def build_network(tls_layout="opposites"):
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
     if result.returncode != 0:
-        print("ERROR netconvert:\n", result.stderr)
+        console.print(f"[bold red]ERROR netconvert:[/bold red]\n{result.stderr}")
         sys.exit(1)
     ok("net.net.xml berhasil dibuat")
 
@@ -251,7 +301,7 @@ def build_network(tls_layout="opposites"):
 #  STEP 2 : Buat routes.rou.xml
 # ---------------------------------------------------------
 def build_routes(orderliness="orderly"):
-    print("\n[2/3] Membuat rute kendaraan dinamis ...")
+    console.print("[bold cyan][2/3][/bold cyan] Membuat rute kendaraan dinamis...")
 
     root = ET.Element("routes")
     root.set("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance")
@@ -329,7 +379,7 @@ def build_routes(orderliness="orderly"):
 #  STEP 2.5 : Buat sensors.add.xml (Kamera Virtual)
 # ---------------------------------------------------------
 def build_sensors():
-    print("\n[2.5/4] Membuat file sensor E2 Detector (Kamera) ...")
+    console.print("[bold cyan][2.5/4][/bold cyan] Membuat file sensor E2 Detector (Kamera)...")
     content = """<?xml version="1.0" encoding="UTF-8"?>
 <additional>
     <!-- Kamera Utara -->
@@ -359,7 +409,7 @@ def build_sensors():
 #  STEP 3 : Buat config.sumocfg
 # ---------------------------------------------------------
 def build_config():
-    print("\n[2.5/3] Membuat file konfigurasi SUMO ...")
+    console.print("[bold cyan][2.5/3][/bold cyan] Membuat file konfigurasi SUMO...")
     content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
@@ -390,7 +440,7 @@ def build_config():
     <gui_only>
         <gui-settings-file value="../{SRC_DIR}/view.view.xml"/>
         <start value="true"/>
-        <quit-on-end value="false"/>
+        <quit-on-end value="true"/>
         <tracker-interval value="0.1"/>
     </gui_only>
 
@@ -414,19 +464,17 @@ def build_config():
 #  STEP 4 : Jalankan sumo-gui
 # ---------------------------------------------------------
 def run_sumo_gui():
-    print("\n[3/3] Menjalankan sumo-gui via TraCI ...")
+    console.print("[bold cyan][3/3][/bold cyan] Menjalankan sumo-gui via TraCI...")
     sumo_gui_bin = find_exe("sumo-gui.exe")
     config_path = os.path.join(BUILD_DIR, "config.sumocfg")
     
     # Jalankan TraCI
-    cmd = [sumo_gui_bin, "-c", config_path, "--delay", "50", "--start"]
-    print(f"  -> {' '.join(cmd)}\n")
+    cmd = [sumo_gui_bin, "-c", config_path, "--delay", "50", "--start", "--quit-on-end"]
+    console.print(f"  -> [dim]{' '.join(cmd)}[/dim]\n")
     
     traci.start(cmd)
     ok("TraCI dan sumo-gui diluncurkan!")
-    print("\n" + "=" * 50)
-    print("  Menjalankan Simulasi dengan Timer...")
-    print("=" * 50)
+    console.print("  [green][STATUS][/green] Simulasi sedang berjalan. Lampu adaptif dikontrol secara dinamis.\n")
     
     # Dapatkan posisi pusat simpang yang sebenarnya (setelah offset di netconvert)
     try:
@@ -450,70 +498,15 @@ def run_sumo_gui():
         except Exception as e:
             print(f"Error POI: {e}")
 
-    # Loop simulasi
-    tls_id = "center"
-    
-    # 1. Pemetaan koneksi traffic light ke arah mata angin
-    try:
-        links = traci.trafficlight.getControlledLinks(tls_id)
-        dir_to_indices = {"N": [], "S": [], "E": [], "W": []}
-        for i, conn_list in enumerate(links):
-            if not conn_list: continue
-            from_edge = conn_list[0][0]
-            if "north" in from_edge: dir_to_indices["N"].append(i)
-            elif "south" in from_edge: dir_to_indices["S"].append(i)
-            elif "east" in from_edge: dir_to_indices["E"].append(i)
-            elif "west" in from_edge: dir_to_indices["W"].append(i)
-    except:
-        dir_to_indices = {}
-
-    def get_accurate_timer(direction_name, current_phase_idx, time_rem, phases):
-        """Menghitung waktu tunggu/sisa berdasarkan urutan siklus lampu merah."""
-        indices = dir_to_indices.get(direction_name, [])
-        if not indices: return "0s"
-        
-        current_state = phases[current_phase_idx].state
-        is_green = any(current_state[i] in ('G', 'g') for i in indices)
-        is_yellow = any(current_state[i] in ('y', 'Y') for i in indices)
-        
-        if is_yellow:
-            return f"Yellow: {int(time_rem)}s" # Kuning
-            
-        total_time = time_rem
-        idx = (current_phase_idx + 1) % len(phases)
-        
-        if is_green:
-            # Hitung total waktu tersisa sampai lampu berubah menjadi non-hijau
-            while True:
-                if idx == current_phase_idx: break
-                if any(phases[idx].state[i] in ('G', 'g') for i in indices):
-                    total_time += phases[idx].duration
-                    idx = (idx + 1) % len(phases)
-                else:
-                    break
-            return f"Green: {int(total_time)}s"
-        else:
-            # Hitung total waktu tunggu sampai lampu berubah menjadi hijau
-            while True:
-                if idx == current_phase_idx: break
-                if any(phases[idx].state[i] in ('G', 'g') for i in indices):
-                    break
-                else:
-                    total_time += phases[idx].duration
-                    idx = (idx + 1) % len(phases)
-            return f"Red: {int(total_time)}s"
+    # Inisialisasi pengontrol lampu adaptif berbasis Time Extension & Phase Skipping
+    controller = TimeExtensionController(tls_id="center")
 
     try:
         while traci.simulation.getMinExpectedNumber() > 0:
             traci.simulationStep()
             
-            current_time = traci.simulation.getTime()
-            next_switch = traci.trafficlight.getNextSwitch(tls_id)
-            time_rem_current = max(0, next_switch - current_time)
-            
-            current_phase_idx = traci.trafficlight.getPhase(tls_id)
-            logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
-            phases = logic.phases
+            # Jalankan logika pengontrol adaptif pada setiap step
+            controller.step(step_length=0.1)
             
             # Update teks gabungan untuk masing-masing arah
             cams = {
@@ -526,10 +519,10 @@ def run_sumo_gui():
             for poi_id in poi_positions.keys():
                 dir_key = poi_id.split("_")[1] # Ambil huruf N, S, W, atau E
                 
-                # Waktu tunggu/sisa
-                timer_text = get_accurate_timer(dir_key, current_phase_idx, time_rem_current, phases)
+                # Baca waktu sisa/estimasi langsung dari controller kita
+                timer_text = controller.get_timer_text(dir_key)
                 
-                # Hitung antrean
+                # Hitung antrean E2
                 try:
                     count = sum(traci.lanearea.getJamLengthVehicle(cam) for cam in cams[dir_key])
                 except traci.exceptions.TraCIException:
@@ -539,13 +532,13 @@ def run_sumo_gui():
                 combined_text = f"[{timer_text} | Queue: {count}]"
                 traci.poi.setType(poi_id, combined_text)
                 
-    except traci.exceptions.FatalTraCIError:
-        print("[INFO] Simulasi ditutup oleh pengguna.")
-    
-    try:
-        traci.close()
-    except:
-        pass
+    except (traci.exceptions.FatalTraCIError, KeyboardInterrupt, SystemExit):
+        console.print("  [yellow][INFO][/yellow] Simulasi ditutup oleh pengguna.")
+    finally:
+        try:
+            traci.close()
+        except:
+            pass
 
 
 # ---------------------------------------------------------
@@ -553,9 +546,6 @@ def run_sumo_gui():
 # ---------------------------------------------------------
 if __name__ == "__main__":
     try:
-        print("=" * 50)
-        print("  Simulasi Perempatan 4 Arah - SUMO")
-        print("=" * 50)
 
         os.chdir(os.path.dirname(os.path.abspath(__file__)))
         os.makedirs(BUILD_DIR, exist_ok=True)
@@ -571,5 +561,5 @@ if __name__ == "__main__":
         build_config()
         run_sumo_gui()
     except KeyboardInterrupt:
-        print("\n\n[INFO] Simulasi dibatalkan oleh pengguna (Ctrl+C).")
+        console.print("\n\n[bold yellow][INFO][/bold yellow] Simulasi dibatalkan oleh pengguna (Ctrl+C).")
         sys.exit(0)
