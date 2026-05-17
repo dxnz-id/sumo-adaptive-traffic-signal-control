@@ -443,14 +443,7 @@ def run_sumo_gui():
         "timer_E": (cx + 30, cy - 10)
     }
     
-    queue_positions = {
-        "queue_N": (cx + 10, cy + 34),
-        "queue_S": (cx - 10, cy - 34),
-        "queue_W": (cx - 34, cy + 10),
-        "queue_E": (cx + 34, cy - 10)
-    }
-    
-    for poi_id, (px, py) in list(poi_positions.items()) + list(queue_positions.items()):
+    for poi_id, (px, py) in poi_positions.items():
         try:
             # Gunakan warna solid (Hitam) agar teks terlihat. Ukuran diset sekecil mungkin.
             traci.poi.add(poi_id, x=px, y=py, color=(0,0,0,255), poiType="0", width=0.1, height=0.1)
@@ -484,7 +477,7 @@ def run_sumo_gui():
         is_yellow = any(current_state[i] in ('y', 'Y') for i in indices)
         
         if is_yellow:
-            return f"K:{int(time_rem)}s" # Kuning
+            return f"Yellow: {int(time_rem)}s" # Kuning
             
         total_time = time_rem
         idx = (current_phase_idx + 1) % len(phases)
@@ -498,7 +491,7 @@ def run_sumo_gui():
                     idx = (idx + 1) % len(phases)
                 else:
                     break
-            return f"H:{int(total_time)}s"
+            return f"Green: {int(total_time)}s"
         else:
             # Hitung total waktu tunggu sampai lampu berubah menjadi hijau
             while True:
@@ -508,7 +501,7 @@ def run_sumo_gui():
                 else:
                     total_time += phases[idx].duration
                     idx = (idx + 1) % len(phases)
-            return f"M:{int(total_time)}s"
+            return f"Red: {int(total_time)}s"
 
     try:
         while traci.simulation.getMinExpectedNumber() > 0:
@@ -522,26 +515,29 @@ def run_sumo_gui():
             logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
             phases = logic.phases
             
-            # Update teks masing-masing POI Timer
-            for poi_id in poi_positions.keys():
-                dir_key = poi_id.split("_")[1] # Ambil huruf N, S, W, atau E
-                timer_text = get_accurate_timer(dir_key, current_phase_idx, time_rem_current, phases)
-                traci.poi.setType(poi_id, timer_text)
-                
-            # Update teks masing-masing POI Antrean dari Kamera (E2 Detector)
+            # Update teks gabungan untuk masing-masing arah
             cams = {
                 "N": ["cam_N_0", "cam_N_1"],
                 "S": ["cam_S_0", "cam_S_1"],
                 "W": ["cam_W_0", "cam_W_1"],
                 "E": ["cam_E_0", "cam_E_1"]
             }
-            for q_id in queue_positions.keys():
-                dir_key = q_id.split("_")[1]
+            
+            for poi_id in poi_positions.keys():
+                dir_key = poi_id.split("_")[1] # Ambil huruf N, S, W, atau E
+                
+                # Waktu tunggu/sisa
+                timer_text = get_accurate_timer(dir_key, current_phase_idx, time_rem_current, phases)
+                
+                # Hitung antrean
                 try:
                     count = sum(traci.lanearea.getJamLengthVehicle(cam) for cam in cams[dir_key])
-                    traci.poi.setType(q_id, f"Antre: {count}")
                 except traci.exceptions.TraCIException:
-                    pass
+                    count = 0
+                
+                # Tampilkan rapi dalam satu baris
+                combined_text = f"[{timer_text} | Queue: {count}]"
+                traci.poi.setType(poi_id, combined_text)
                 
     except traci.exceptions.FatalTraCIError:
         print("[INFO] Simulasi ditutup oleh pengguna.")
