@@ -326,6 +326,36 @@ def build_routes(orderliness="orderly"):
 
 
 # ---------------------------------------------------------
+#  STEP 2.5 : Buat sensors.add.xml (Kamera Virtual)
+# ---------------------------------------------------------
+def build_sensors():
+    print("\n[2.5/4] Membuat file sensor E2 Detector (Kamera) ...")
+    content = """<?xml version="1.0" encoding="UTF-8"?>
+<additional>
+    <!-- Kamera Utara -->
+    <laneAreaDetector id="cam_N_0" lane="north_in_2_0" pos="0" endPos="-1" freq="1" file="NUL"/>
+    <laneAreaDetector id="cam_N_1" lane="north_in_2_1" pos="0" endPos="-1" freq="1" file="NUL"/>
+    
+    <!-- Kamera Selatan -->
+    <laneAreaDetector id="cam_S_0" lane="south_in_2_0" pos="0" endPos="-1" freq="1" file="NUL"/>
+    <laneAreaDetector id="cam_S_1" lane="south_in_2_1" pos="0" endPos="-1" freq="1" file="NUL"/>
+    
+    <!-- Kamera Barat -->
+    <laneAreaDetector id="cam_W_0" lane="west_in_2_0" pos="0" endPos="-1" freq="1" file="NUL"/>
+    <laneAreaDetector id="cam_W_1" lane="west_in_2_1" pos="0" endPos="-1" freq="1" file="NUL"/>
+    
+    <!-- Kamera Timur -->
+    <laneAreaDetector id="cam_E_0" lane="east_in_2_0" pos="0" endPos="-1" freq="1" file="NUL"/>
+    <laneAreaDetector id="cam_E_1" lane="east_in_2_1" pos="0" endPos="-1" freq="1" file="NUL"/>
+</additional>
+"""
+    sensor_path = os.path.join(BUILD_DIR, "sensors.add.xml")
+    with open(sensor_path, "w", encoding="utf-8") as f:
+        f.write(content)
+    ok(f"{sensor_path} berhasil dibuat")
+
+
+# ---------------------------------------------------------
 #  STEP 3 : Buat config.sumocfg
 # ---------------------------------------------------------
 def build_config():
@@ -337,6 +367,7 @@ def build_config():
     <input>
         <net-file value="net.net.xml"/>
         <route-files value="routes.rou.xml"/>
+        <additional-files value="sensors.add.xml"/>
     </input>
 
     <time>
@@ -412,7 +443,14 @@ def run_sumo_gui():
         "timer_E": (cx + 30, cy - 10)
     }
     
-    for poi_id, (px, py) in poi_positions.items():
+    queue_positions = {
+        "queue_N": (cx + 10, cy + 34),
+        "queue_S": (cx - 10, cy - 34),
+        "queue_W": (cx - 34, cy + 10),
+        "queue_E": (cx + 34, cy - 10)
+    }
+    
+    for poi_id, (px, py) in list(poi_positions.items()) + list(queue_positions.items()):
         try:
             # Gunakan warna solid (Hitam) agar teks terlihat. Ukuran diset sekecil mungkin.
             traci.poi.add(poi_id, x=px, y=py, color=(0,0,0,255), poiType="0", width=0.1, height=0.1)
@@ -481,14 +519,29 @@ def run_sumo_gui():
             time_rem_current = max(0, next_switch - current_time)
             
             current_phase_idx = traci.trafficlight.getPhase(tls_id)
-            logic = traci.trafficlight.getCompleteRedYellowGreenDefinition(tls_id)[0]
+            logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
             phases = logic.phases
             
-            # Update teks masing-masing POI
+            # Update teks masing-masing POI Timer
             for poi_id in poi_positions.keys():
                 dir_key = poi_id.split("_")[1] # Ambil huruf N, S, W, atau E
                 timer_text = get_accurate_timer(dir_key, current_phase_idx, time_rem_current, phases)
                 traci.poi.setType(poi_id, timer_text)
+                
+            # Update teks masing-masing POI Antrean dari Kamera (E2 Detector)
+            cams = {
+                "N": ["cam_N_0", "cam_N_1"],
+                "S": ["cam_S_0", "cam_S_1"],
+                "W": ["cam_W_0", "cam_W_1"],
+                "E": ["cam_E_0", "cam_E_1"]
+            }
+            for q_id in queue_positions.keys():
+                dir_key = q_id.split("_")[1]
+                try:
+                    count = sum(traci.lanearea.getJamLengthVehicle(cam) for cam in cams[dir_key])
+                    traci.poi.setType(q_id, f"Antre: {count}")
+                except traci.exceptions.TraCIException:
+                    pass
                 
     except traci.exceptions.FatalTraCIError:
         print("[INFO] Simulasi ditutup oleh pengguna.")
@@ -518,6 +571,7 @@ if __name__ == "__main__":
         # 2. Jalankan proses simulasi
         build_network(tls_layout)
         build_routes(orderliness)
+        build_sensors()
         build_config()
         run_sumo_gui()
     except KeyboardInterrupt:
