@@ -1,0 +1,9 @@
+[project]
+name = "suno-adaptive-traffic-light"
+version = "0.1.0"
+description = "SUNO Adaptive Traffic Light"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "traci>=1.26.0",
+]
