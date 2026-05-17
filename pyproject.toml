@@ -13,3 +13,7 @@ dependencies = [
     "tqdm>=4.67.3",
     "traci>=1.26.0",
 ]
+
+[tool.pyright]
+extraPaths = ["."]
+

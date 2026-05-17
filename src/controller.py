@@ -1,38 +1,64 @@
+"""
+🚥 SUMO ADAPTIVE TRAFFIC LIGHT CONTROLLER 🚥
+Modul Jembatan Antara Simulator SUMO (TraCI) dan Algoritma Cerdas
+===================================================================
+Modul ini bertindak sebagai driver/controller yang membaca kamera sensor E2
+di SUMO, lalu mendelegasikan keputusan kendali ke TimeExtensionAlgorithm.
+"""
+
 import traci
 from rich.console import Console
+from .algorithm import TimeExtensionAlgorithm
 
-# Inisialisasi Console untuk log premium
 console = Console()
 
 class TimeExtensionController:
-    def __init__(self, tls_id="center", min_green=10.0, max_green=50.0, extension_time=3.0, yellow_duration=4.0):
+    def __init__(self, tls_id="center", min_green=10.0, max_green=50.0, yellow_duration=4.0):
         self.tls_id = tls_id
-        self.min_green = min_green
-        self.max_green = max_green
-        self.extension_time = extension_time
-        self.yellow_duration = yellow_duration
         
-        # State tracking
-        self.elapsed_green = 0.0
-        self.elapsed_yellow = 0.0
+        # Instansiasi Mesin Logika Algoritma Murni
+        self.algorithm = TimeExtensionAlgorithm(
+            min_green=min_green,
+            max_green=max_green,
+            yellow_duration=yellow_duration
+        )
         
-        self.is_yellow_phase = False
-        self.current_direction = "N"  # Mulai dari Utara
-        
-        # Pelacakan durasi tunggu awal lampu merah
-        self.initial_red_wait = {"N": 0.0, "S": 0.0, "E": 0.0, "W": 0.0}
-        
-        # Status kesehatan kamera per arah
+        # Status kesehatan kamera sensor E2 per arah
         self.cams_healthy = {"N": True, "S": True, "E": True, "W": True}
         
-        # Mapping arah ke fase lampu hijau & kuning (Mode Tunggal / Incoming)
-        self.dir_phases = {
-            "N": {"green": 0, "yellow": 1},
-            "E": {"green": 2, "yellow": 3},
-            "S": {"green": 4, "yellow": 5},
-            "W": {"green": 6, "yellow": 7}
-        }
+        # Konfigurasi Sumbu Sisi Ganda
+        self.counterpart = {"N": "S", "S": "N", "E": "W", "W": "E"}
+        self.is_ganda = False
         
+        # Pendeteksian dinamis program TLS (Tunggal vs Ganda) via TraCI
+        try:
+            logics = traci.trafficlight.getAllProgramLogics(self.tls_id)
+            if logics:
+                num_phases = len(logics[0].phases)
+                if num_phases <= 4:
+                    self.is_ganda = True
+        except Exception as e:
+            console.print(f"[bold yellow][WARNING][/bold yellow] Gagal deteksi program TLS secara dinamis: {e}")
+            
+        if self.is_ganda:
+            # Mode Ganda (opposites): N-S satu fase, E-W satu fase
+            self.dir_phases = {
+                "N": {"green": 0, "yellow": 1},
+                "S": {"green": 0, "yellow": 1},
+                "E": {"green": 2, "yellow": 3},
+                "W": {"green": 2, "yellow": 3}
+            }
+            console.print("  [STATUS] Deteksi TLS: Mode Ganda (opposites) terdeteksi otomatis.")
+        else:
+            # Mode Tunggal (incoming): tiap arah independen
+            self.dir_phases = {
+                "N": {"green": 0, "yellow": 1},
+                "E": {"green": 2, "yellow": 3},
+                "S": {"green": 4, "yellow": 5},
+                "W": {"green": 6, "yellow": 7}
+            }
+            console.print("  [STATUS] Deteksi TLS: Mode Tunggal (incoming) terdeteksi otomatis.")
+            
         self.cams = {
             "N": ["cam_N_0", "cam_N_1"],
             "S": ["cam_S_0", "cam_S_1"],
@@ -40,59 +66,95 @@ class TimeExtensionController:
             "E": ["cam_E_0", "cam_E_1"]
         }
         
-        # Inisialisasi awal: paksa SUMO ke fase hijau Utara dan deaktifkan timer internal SUMO
+        # Inisialisasi awal: paksa SUMO ke fase hijau awal (Utara)
         try:
-            traci.trafficlight.setPhase(self.tls_id, self.dir_phases[self.current_direction]["green"])
-            traci.trafficlight.setPhaseDuration(self.tls_id, 9999.0)
+            traci.trafficlight.setPhase(self.tls_id, self.dir_phases[self.algorithm.current_direction]["green"])
+            traci.trafficlight.setPhaseDuration(self.tls_id, 9999.0) # Matikan timer internal SUMO
         except Exception as e:
             console.print(f"[bold yellow][WARNING][/bold yellow] Gagal inisialisasi awal TLS: {e}")
+            
+        # Dapatkan posisi simpang untuk meletakkan POI teks timer di layar SUMO
+        try:
+            cx, cy = traci.junction.getPosition(self.tls_id)
+        except:
+            cx, cy = 400.0, 400.0
+            
+        self.poi_positions = {
+            "timer_N": (cx + 10.0, cy + 30.0),
+            "timer_S": (cx - 10.0, cy - 30.0),
+            "timer_W": (cx - 30.0, cy + 10.0),
+            "timer_E": (cx + 30.0, cy - 10.0)
+        }
+        
+        # Buat POI transparan untuk menampung visualisasi teks timer di GUI
+        for poi_id, (px, py) in self.poi_positions.items():
+            try:
+                traci.poi.add(poi_id, x=px, y=py, color=(0,0,0,255), poiType="0", width=0.1, height=0.1)
+            except Exception as e:
+                pass
         
     def step(self, step_length=0.1):
         """Dipanggil setiap tick 0.1s di loop utama main.py"""
-        # 1. Jika sedang fase Kuning, tunggu sampai durasi kuning selesai
-        if self.is_yellow_phase:
-            self.elapsed_yellow += step_length
-            if self.elapsed_yellow >= self.yellow_duration:
-                self.is_yellow_phase = False
-                self.elapsed_yellow = 0.0
-                self.elapsed_green = 0.0
+        # Pembaruan visual teks POI di GUI secara otomatis
+        self.update_gui_poiss()
+        
+        # 1. Jika sedang dalam fase transisi Kuning
+        if self.algorithm.is_yellow_phase:
+            self.algorithm.elapsed_yellow += step_length
+            if self.algorithm.elapsed_yellow >= self.algorithm.yellow_duration:
+                self.algorithm.is_yellow_phase = False
+                self.algorithm.elapsed_yellow = 0.0
+                self.algorithm.elapsed_green = 0.0
                 
-                # Tentukan arah hijau berikutnya (Phase Skipping)
-                next_dir = self.select_next_direction()
+                # Tentukan arah hijau berikutnya dari mesin keputusan algoritma
+                next_dir = self.algorithm.select_next_direction(
+                    self.is_ganda, self.dir_phases, self.counterpart, self.get_queue_count
+                )
                 
-                # Arah saat ini (sebelumnya kuning) akan bertransisi ke MERAH
-                old_dir = self.current_direction
-                self.current_direction = next_dir
-                self.initial_red_wait[old_dir] = self.calculate_estimated_wait(old_dir)
+                old_dir = self.algorithm.current_direction
+                self.algorithm.current_direction = next_dir
                 
+                # Hitung dan simpan estimasi tunggu awal untuk arah yang baru saja berubah merah
+                self.algorithm.initial_red_wait[old_dir] = self.algorithm.calculate_estimated_wait(
+                    old_dir, self.is_ganda, self.dir_phases, self.counterpart,
+                    self.get_active_vehicles, self.get_queue_count
+                )
+                
+                # Perintahkan SUMO ke fase hijau baru
                 traci.trafficlight.setPhase(self.tls_id, self.dir_phases[next_dir]["green"])
                 traci.trafficlight.setPhaseDuration(self.tls_id, 9999.0) # Matikan timer internal SUMO
-                console.print(f"[bold green][GREEN][/bold green] Lampu [bold cyan]HIJAU[/bold cyan] menyala di arah [bold magenta]{next_dir}[/bold magenta] (min_green={self.min_green}s)")
+                console.print(f"[bold green][GREEN][/bold green] Lampu [bold cyan]HIJAU[/bold cyan] menyala di arah [bold magenta]{next_dir}[/bold magenta] (min_green={self.algorithm.min_green}s)")
             return
 
-        # 2. Jika sedang fase Hijau, jalankan logika Time Extension
-        self.elapsed_green += step_length
-        
-        # Baca deteksi kendaraan aktif di arah hijau saat ini
-        vehicles_detected = self.get_active_vehicles(self.current_direction)
-        
-        # Logika Gap-out & Max-out
-        if self.elapsed_green >= self.min_green:
-            # GAP-OUT: Jika kosong dan kamera sehat
-            if vehicles_detected == 0 and self.cams_healthy[self.current_direction]:
-                console.print(f"[bold yellow][GAP-OUT][/bold yellow] Celah kosong terdeteksi di arah [bold magenta]{self.current_direction}[/bold magenta] setelah [bold cyan]{self.elapsed_green:.1f}s[/bold cyan]. Pindah ke Kuning.")
-                self.trigger_yellow()
-            # MAX-OUT: Jika sudah mencapai batas waktu maksimal
-            elif self.elapsed_green >= self.max_green:
-                console.print(f"[bold red][MAX-OUT][/bold red] Batas maksimal hijau arah [bold magenta]{self.current_direction}[/bold magenta] ([bold cyan]{self.max_green}s[/bold cyan]) tercapai. Pindah ke Kuning.")
-                self.trigger_yellow()
+        # 2. Jika sedang dalam fase Hijau, minta keputusan Gap-out/Max-out ke algoritma
+        vehicles_detected = self.get_active_vehicles(self.algorithm.current_direction)
+        if self.is_ganda:
+            counter_detected = self.get_active_vehicles(self.counterpart[self.algorithm.current_direction])
+            if vehicles_detected == 999 or counter_detected == 999:
+                vehicles_detected = 999
+            else:
+                vehicles_detected += counter_detected
                 
-    def trigger_yellow(self):
-        self.is_yellow_phase = True
-        self.elapsed_yellow = 0.0
-        traci.trafficlight.setPhase(self.tls_id, self.dir_phases[self.current_direction]["yellow"])
-        traci.trafficlight.setPhaseDuration(self.tls_id, 9999.0) # Matikan timer internal SUMO
+        is_healthy = self.cams_healthy[self.algorithm.current_direction]
+        if self.is_ganda:
+            is_healthy = is_healthy and self.cams_healthy[self.counterpart[self.algorithm.current_direction]]
+            
+        should_yellow, reason = self.algorithm.decide_yellow_transition(
+            step_length, vehicles_detected, is_healthy
+        )
         
+        if should_yellow:
+            # Pindah ke kuning di program utama & simulator
+            self.algorithm.is_yellow_phase = True
+            self.algorithm.elapsed_yellow = 0.0
+            
+            traci.trafficlight.setPhase(self.tls_id, self.dir_phases[self.algorithm.current_direction]["yellow"])
+            traci.trafficlight.setPhaseDuration(self.tls_id, 9999.0) # Matikan timer internal SUMO
+            
+            # Cari prefix warna cetak konsol
+            prefix = "[bold red][MAX-OUT][/bold red]" if "MAX" in reason else "[bold yellow][GAP-OUT][/bold yellow]"
+            console.print(f"{prefix} Pindah ke Kuning arah [bold magenta]{self.algorithm.current_direction}[/bold magenta] karena {reason}.")
+
     def get_active_vehicles(self, direction):
         """Membaca jumlah kendaraan aktif dengan penanganan failsafe"""
         if not self.cams_healthy[direction]:
@@ -119,83 +181,26 @@ class TimeExtensionController:
             self.cams_healthy[direction] = False
             return 999
 
-    def select_next_direction(self):
-        """Mencari arah hijau berikutnya dengan fitur Phase Skipping"""
-        sequence = ["N", "E", "S", "W"]
-        curr_idx = sequence.index(self.current_direction)
-        
-        # Cek arah berikutnya dalam urutan memutar
-        for i in range(1, 5):
-            next_idx = (curr_idx + i) % 4
-            candidate_dir = sequence[next_idx]
+    def update_gui_poiss(self):
+        """Update teks timer dan antrean di GUI secara otomatis"""
+        for poi_id in self.poi_positions.keys():
+            dir_key = poi_id.split("_")[1] # N, S, W, atau E
             
-            queue_count = self.get_queue_count(candidate_dir)
+            timer_text = self.algorithm.get_timer_text(
+                dir_key, self.is_ganda, self.dir_phases, self.counterpart,
+                self.get_active_vehicles, self.get_queue_count
+            )
             
-            if queue_count > 0:
-                # Ada kendaraan! Berikan hijau
-                if i > 1:
-                    skipped = [sequence[(curr_idx + j) % 4] for j in range(1, i)]
-                    console.print(f"[bold blue][SKIP][/bold blue] Phase Skipping aktif! Melewati arah [bold red]{', '.join(skipped)}[/bold red] karena kosong.")
-                return candidate_dir
-                
-        # Jika semua arah lain kosong melompati, tetap di arah saat ini
-        return self.current_direction
-
-    def calculate_estimated_wait(self, direction):
-        """Menghitung estimasi sisa waktu tunggu untuk arah lampu merah secara riil"""
-        sequence = ["N", "E", "S", "W"]
-        curr_idx = sequence.index(self.current_direction)
-        target_idx = sequence.index(direction)
-        
-        steps_away = (target_idx - curr_idx) % 4
-        estimated_wait = 0.0
-        
-        # Sisa waktu dari fase aktif saat ini (hijau/kuning)
-        if self.is_yellow_phase:
-            estimated_wait += max(0.0, self.yellow_duration - self.elapsed_yellow)
-        else:
-            active_cams = self.cams[self.current_direction]
             try:
-                vehicles = sum(traci.lanearea.getLastStepVehicleNumber(cam) for cam in active_cams)
+                if not self.cams_healthy[dir_key]:
+                    count = 0
+                else:
+                    count = sum(traci.lanearea.getJamLengthVehicle(cam) for cam in self.cams[dir_key])
             except:
-                vehicles = 0
+                count = 0
                 
-            if self.elapsed_green < self.min_green:
-                estimated_wait += (self.min_green - self.elapsed_green) + self.yellow_duration
-            elif vehicles > 0:
-                estimated_wait += max(0.0, self.max_green - self.elapsed_green) + self.yellow_duration
-            else:
-                estimated_wait += self.yellow_duration # Segera kuning
-                
-        # Ditambah min_green + kuning untuk arah-arah di antaranya yang memiliki antrean (tidak di-skip)
-        for i in range(1, steps_away):
-            intermediate_idx = (curr_idx + i) % 4
-            intermediate_dir = sequence[intermediate_idx]
-            
-            if self.get_queue_count(intermediate_dir) > 0:
-                estimated_wait += self.min_green + self.yellow_duration
-                
-        return estimated_wait
-
-    def get_timer_text(self, direction):
-        """Mengestimasi sisa waktu secara dinamis untuk ditampilkan di GUI"""
-        # 1. Jika arah tersebut sedang aktif (Hijau atau Kuning)
-        if self.current_direction == direction:
-            if self.is_yellow_phase:
-                rem = max(0.0, self.yellow_duration - self.elapsed_yellow)
-                return f"Yellow: {int(rem)}s/{int(self.yellow_duration)}s"
-            else:
-                # Tampilkan sisa waktu ke batas maksimal lampu hijau
-                rem = max(0.0, self.max_green - self.elapsed_green)
-                return f"Green: {int(rem)}s/{int(self.max_green)}s"
-        
-        # 2. Arah tersebut sedang Merah.
-        rem = self.calculate_estimated_wait(direction)
-        total = self.initial_red_wait.get(direction, 0.0)
-        
-        # Failsafe visual: Jaga agar total tidak lebih kecil dari sisa waktu (rem)
-        if rem > total:
-            self.initial_red_wait[direction] = rem
-            total = rem
-            
-        return f"Red: {int(rem)}s/{int(total)}s"
+            combined_text = f"[{timer_text} | Queue: {count}]"
+            try:
+                traci.poi.setType(poi_id, combined_text)
+            except:
+                pass
