@@ -1,9 +1,9 @@
 """
-🧠 SUMO ADAPTIVE TRAFFIC LIGHT ALGORITHM 🧠
-Modul Murni Logika & Pengambilan Keputusan Kendali Lampu Adaptif
+SUMO ADAPTIVE TRAFFIC LIGHT ALGORITHM
+Pure Logic & Decision-Making Module for Adaptive Control
 ===================================================================
-Modul ini murni berisi matematika, pelacakan state keputusan,
-serta logika Phase Skipping & Time Extension tanpa ketergantungan pada TraCI.
+This module contains pure mathematical formulas, decision state tracking,
+and Phase Skipping & Time Extension logic, completely isolated from TraCI.
 """
 
 from rich.console import Console
@@ -16,83 +16,81 @@ class TimeExtensionAlgorithm:
         self.max_green = max_green
         self.yellow_duration = yellow_duration
         
-        # State tracking keputusan
+        # Decision state tracking variables
         self.elapsed_green = 0.0
         self.elapsed_yellow = 0.0
         self.is_yellow_phase = False
-        self.current_direction = "N"  # Mulai dari Utara
+        self.current_direction = "N"  # Start active from North
         
-        # Pelacakan durasi tunggu awal lampu merah
+        # Initial red phase wait trackers per direction
         self.initial_red_wait = {"N": 0.0, "S": 0.0, "E": 0.0, "W": 0.0}
 
     def decide_yellow_transition(self, step_length, vehicles_detected, is_healthy):
         """
-        Menentukan apakah lampu hijau saat ini harus bertransisi ke kuning
-        berdasarkan logika Gap-out (celah kosong) dan Max-out (batas maksimal).
+        Determines whether the active green phase should transition to yellow
+        based on Gap-out (empty gap detected) and Max-out (maximum limit reached).
         """
         self.elapsed_green += step_length
         
         if self.elapsed_green >= self.min_green:
-            # GAP-OUT: Jika kosong dan kamera sehat
+            # GAP-OUT: If active camera is healthy and no vehicles are detected
             if vehicles_detected == 0 and is_healthy:
-                return True, f"GAP-OUT (Celah kosong setelah {self.elapsed_green:.1f}s)"
-            # MAX-OUT: Jika sudah mencapai batas waktu maksimal
+                return True, f"GAP-OUT (Empty gap detected after {self.elapsed_green:.1f}s)"
+            # MAX-OUT: If green duration reaches the maximum configured limit
             elif self.elapsed_green >= self.max_green:
-                return True, f"MAX-OUT (Batas maksimal hijau {self.max_green}s tercapai)"
+                return True, f"MAX-OUT (Maximum green limit of {self.max_green}s reached)"
                 
         return False, "KEEP"
 
-    def select_next_direction(self, is_ganda, dir_phases, counterpart, get_queue_fn):
+    def select_next_direction(self, is_dual_mode, direction_phases, counterpart, get_queue_fn):
         """
-        Mencari arah hijau berikutnya dengan logika Phase Skipping memutar.
+        Determines the next green phase direction utilizing circular Phase Skipping logic.
         """
         sequence = ["N", "E", "S", "W"]
         curr_idx = sequence.index(self.current_direction)
         
-        # Cek arah berikutnya dalam urutan memutar
+        # Scan next directions in circular queue order
         for i in range(1, 5):
             next_idx = (curr_idx + i) % 4
             candidate_dir = sequence[next_idx]
             
-            # Jika mode Ganda, lewati arah yang se-fase dengan arah saat ini
-            if is_ganda and dir_phases[candidate_dir]["green"] == dir_phases[self.current_direction]["green"]:
+            # If in Dual mode, skip candidates sharing the same green phase as the current direction
+            if is_dual_mode and direction_phases[candidate_dir]["green"] == direction_phases[self.current_direction]["green"]:
                 continue
                 
             queue_count = get_queue_fn(candidate_dir)
-            if is_ganda:
+            if is_dual_mode:
                 queue_count += get_queue_fn(counterpart[candidate_dir])
             
             if queue_count > 0:
-                # Ada kendaraan! Berikan hijau
+                # Vehicles detected! Set next green direction
                 if i > 1:
                     skipped = [sequence[(curr_idx + j) % 4] for j in range(1, i)]
-                    # Di mode ganda, jangan tampilkan skip jika arah tersebut se-fase dengan candidate_dir atau current_direction
-                    if is_ganda:
-                        skipped = [d for d in skipped if dir_phases[d]["green"] != dir_phases[self.current_direction]["green"] and dir_phases[d]["green"] != dir_phases[candidate_dir]["green"]]
+                    # In Dual mode, suppress skip notifications for directions sharing phase with candidates or current
+                    if is_dual_mode:
+                        skipped = [d for d in skipped if direction_phases[d]["green"] != direction_phases[self.current_direction]["green"] and direction_phases[d]["green"] != direction_phases[candidate_dir]["green"]]
                     if skipped:
-                        console.print(f"[bold blue][SKIP][/bold blue] Phase Skipping aktif! Melewati arah [bold red]{', '.join(skipped)}[/bold red] karena kosong.")
+                        console.print(f"[bold blue][SKIP][/bold blue] Phase Skipping active! Skipping empty directions: [bold red]{', '.join(skipped)}[/bold red].")
                 return candidate_dir
                 
-        # Jika semua arah lain kosong melompati, tetap di arah saat ini
+        # If all other directions are completely empty, keep the current green active
         return self.current_direction
 
-    def calculate_estimated_wait(self, direction, is_ganda, dir_phases, counterpart, get_vehicles_fn, get_queue_fn):
+    def calculate_estimated_wait(self, direction, is_dual_mode, direction_phases, counterpart, get_vehicles_fn, get_queue_fn):
         """
-        Menghitung estimasi sisa waktu tunggu untuk arah lampu merah secara riil.
+        Calculates the real-time estimated remaining wait time for a red light direction.
         """
-        if is_ganda:
-            # Di mode Ganda, jika target searah/se-fase dengan arah aktif saat ini, sisanya 0
-            if dir_phases[direction]["green"] == dir_phases[self.current_direction]["green"]:
+        if is_dual_mode:
+            # In Dual mode, if the target shares the same green phase as the currently active direction, wait time is 0
+            if direction_phases[direction]["green"] == direction_phases[self.current_direction]["green"]:
                 return 0.0
                 
-            # Jika berbeda fase, waktu tunggu adalah sisa waktu dari fase aktif saat ini
+            # If opposite phase, wait time is equal to the remaining active duration of the current phase
             estimated_wait = 0.0
             if self.is_yellow_phase:
                 estimated_wait += max(0.0, self.yellow_duration - self.elapsed_yellow)
             else:
-                active_cams = get_vehicles_fn(self.current_direction) + get_vehicles_fn(counterpart[self.current_direction])
-                # get_vehicles_fn di controller mengembalikan count, sesuaikan penerimaannya
-                vehicles = active_cams
+                vehicles = get_vehicles_fn(self.current_direction) + get_vehicles_fn(counterpart[self.current_direction])
                 
                 if self.elapsed_green < self.min_green:
                     estimated_wait += (self.min_green - self.elapsed_green) + self.yellow_duration
@@ -109,7 +107,7 @@ class TimeExtensionAlgorithm:
         steps_away = (target_idx - curr_idx) % 4
         estimated_wait = 0.0
         
-        # Sisa waktu dari fase aktif saat ini (hijau/kuning)
+        # Calculate remaining active time of current active phase (Green/Yellow)
         if self.is_yellow_phase:
             estimated_wait += max(0.0, self.yellow_duration - self.elapsed_yellow)
         else:
@@ -120,9 +118,9 @@ class TimeExtensionAlgorithm:
             elif vehicles > 0:
                 estimated_wait += max(0.0, self.max_green - self.elapsed_green) + self.yellow_duration
             else:
-                estimated_wait += self.yellow_duration # Segera kuning
+                estimated_wait += self.yellow_duration  # Immediate yellow transition
                 
-        # Ditambah min_green + kuning untuk arah-arah di antaranya yang memiliki antrean (tidak di-skip)
+        # Add min_green + yellow for intermediate directions containing queued traffic (non-skipped)
         for i in range(1, steps_away):
             intermediate_idx = (curr_idx + i) % 4
             intermediate_dir = sequence[intermediate_idx]
@@ -132,29 +130,29 @@ class TimeExtensionAlgorithm:
                 
         return estimated_wait
 
-    def get_timer_text(self, direction, is_ganda, dir_phases, counterpart, get_vehicles_fn, get_queue_fn):
+    def get_timer_text(self, direction, is_dual_mode, direction_phases, counterpart, get_vehicles_fn, get_queue_fn):
         """
-        Mengestimasi sisa waktu secara dinamis untuk ditampilkan di GUI.
+        Dynamically calculates active/red phase durations for SUMO GUI text visualization.
         """
-        # 1. Jika arah tersebut sedang aktif (Hijau atau Kuning)
+        # 1. If target direction is currently active (Green or Yellow)
         is_active = (self.current_direction == direction)
-        if is_ganda:
-            is_active = (dir_phases[direction]["green"] == dir_phases[self.current_direction]["green"])
+        if is_dual_mode:
+            is_active = (direction_phases[direction]["green"] == direction_phases[self.current_direction]["green"])
             
         if is_active:
             if self.is_yellow_phase:
                 rem = max(0.0, self.yellow_duration - self.elapsed_yellow)
                 return f"Yellow: {int(rem)}s/{int(self.yellow_duration)}s"
             else:
-                # Tampilkan sisa waktu ke batas maksimal lampu hijau
+                # Show countdown to maximum allowed green duration
                 rem = max(0.0, self.max_green - self.elapsed_green)
                 return f"Green: {int(rem)}s/{int(self.max_green)}s"
         
-        # 2. Arah tersebut sedang Merah.
-        rem = self.calculate_estimated_wait(direction, is_ganda, dir_phases, counterpart, get_vehicles_fn, get_queue_fn)
+        # 2. If target direction is currently Red (show dynamic real-time wait estimation)
+        rem = self.calculate_estimated_wait(direction, is_dual_mode, direction_phases, counterpart, get_vehicles_fn, get_queue_fn)
         total = self.initial_red_wait.get(direction, 0.0)
         
-        # Failsafe visual: Jaga agar total tidak lebih kecil dari sisa waktu (rem)
+        # Visual failsafe: Ensure wait total is never less than remaining countdown wait time
         if rem > total:
             self.initial_red_wait[direction] = rem
             total = rem

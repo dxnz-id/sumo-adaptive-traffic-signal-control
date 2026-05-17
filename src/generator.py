@@ -17,7 +17,7 @@ def ok(msg: str):
     console.print(f"  [green][OK][/green] {msg}")
 
 def find_exe(name: str) -> str:
-    """Cari executable SUMO di PATH sistem atau SUMO_BIN."""
+    """Finds a SUMO executable in system PATH or SUMO_HOME bin."""
     found = shutil.which(name)
     if found:
         return found
@@ -27,9 +27,9 @@ def find_exe(name: str) -> str:
     if os.path.isfile(candidate):
         return candidate
     raise FileNotFoundError(
-        f"Tidak dapat menemukan '{name}'.\n"
-        f"Pastikan SUMO terinstall dan SUMO_HOME di-set dengan benar.\n"
-        f"SUMO_HOME saat ini: {sumo_home}"
+        f"Unable to locate executable '{name}'.\n"
+        f"Ensure SUMO is installed correctly and SUMO_HOME is set in your environment variables.\n"
+        f"Current SUMO_HOME path: {sumo_home}"
     )
 
 def prettify(elem) -> str:
@@ -47,7 +47,7 @@ def write_xml(path: str, content: str):
     ok(os.path.basename(path))
 
 def build_network(tls_layout="opposites"):
-    console.print("\n[bold cyan][1/3][/bold cyan] Membuat jaringan jalan dengan netconvert...")
+    console.print("\n[bold cyan][1/3][/bold cyan] Building road network layout with netconvert...")
     netconvert_bin = find_exe("netconvert.exe")
     cmd = [
         netconvert_bin,
@@ -68,19 +68,19 @@ def build_network(tls_layout="opposites"):
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
     if result.returncode != 0:
-        console.print(f"[bold red]ERROR netconvert:[/bold red]\n{result.stderr}")
+        console.print(f"[bold red]netconvert error:[/bold red]\n{result.stderr}")
         sys.exit(1)
-    ok("net.net.xml berhasil dibuat")
+    ok("net.net.xml successfully generated")
 
 def build_routes(orderliness="orderly"):
-    console.print("[bold cyan][2/3][/bold cyan] Membuat rute kendaraan dinamis...")
+    console.print("[bold cyan][2/3][/bold cyan] Generating dynamic vehicle routes...")
 
     root = ET.Element("routes")
     root.set("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance")
     root.set("xsi:noNamespaceSchemaLocation",
              "http://sumo.dlr.de/xsd/routes_file.xsd")
 
-    # -- Definisi vType --
+    # -- Define vType elements --
     for vtype_id, accel, decel, length, maxspeed, sigma, color, _ in VEHICLE_TYPES:
         actual_sigma = sigma if orderliness == "chaotic" else 0.1
         actual_tau   = 1.0 if orderliness == "orderly" else 0.5
@@ -97,7 +97,7 @@ def build_routes(orderliness="orderly"):
         vtype.set("guiShape",    GUI_SHAPE[vtype_id])
         vtype.set("speedFactor", "normc(1.0,0.1,0.8,1.2)")
 
-    # -- Definisi route --
+    # -- Define route elements --
     route_ids: dict = {}
     for direction, moves in ROUTES.items():
         for move, (edge_in, edge_out) in moves.items():
@@ -107,7 +107,7 @@ def build_routes(orderliness="orderly"):
             route_elem.set("id",    rid)
             route_elem.set("edges", f"{edge_in} {edge_out}")
 
-    # -- Generate kendaraan --
+    # -- Generate vehicle departures --
     veh_id   = 0
     vehicles = []
 
@@ -142,25 +142,25 @@ def build_routes(orderliness="orderly"):
         veh_id += 1
 
     write_xml(os.path.join(BUILD_DIR, "routes.rou.xml"), prettify(root))
-    ok(f"Total kendaraan: {veh_id}")
+    ok(f"Total simulated vehicles: {veh_id}")
 
 def build_sensors():
-    console.print("[bold cyan][2.5/4][/bold cyan] Membuat file sensor E2 Detector (Kamera)...")
+    console.print("[bold cyan][2.5/4][/bold cyan] Generating E2 Detector camera sensor definitions...")
     content = """<?xml version="1.0" encoding="UTF-8"?>
 <additional>
-    <!-- Kamera Utara -->
+    <!-- North Sensors -->
     <laneAreaDetector id="cam_N_0" lane="north_in_2_0" pos="0" endPos="-1" freq="1" file="NUL"/>
     <laneAreaDetector id="cam_N_1" lane="north_in_2_1" pos="0" endPos="-1" freq="1" file="NUL"/>
     
-    <!-- Kamera Selatan -->
+    <!-- South Sensors -->
     <laneAreaDetector id="cam_S_0" lane="south_in_2_0" pos="0" endPos="-1" freq="1" file="NUL"/>
     <laneAreaDetector id="cam_S_1" lane="south_in_2_1" pos="0" endPos="-1" freq="1" file="NUL"/>
     
-    <!-- Kamera Barat -->
+    <!-- West Sensors -->
     <laneAreaDetector id="cam_W_0" lane="west_in_2_0" pos="0" endPos="-1" freq="1" file="NUL"/>
     <laneAreaDetector id="cam_W_1" lane="west_in_2_1" pos="0" endPos="-1" freq="1" file="NUL"/>
     
-    <!-- Kamera Timur -->
+    <!-- East Sensors -->
     <laneAreaDetector id="cam_E_0" lane="east_in_2_0" pos="0" endPos="-1" freq="1" file="NUL"/>
     <laneAreaDetector id="cam_E_1" lane="east_in_2_1" pos="0" endPos="-1" freq="1" file="NUL"/>
 </additional>
@@ -168,10 +168,10 @@ def build_sensors():
     sensor_path = os.path.join(BUILD_DIR, "sensors.add.xml")
     with open(sensor_path, "w", encoding="utf-8") as f:
         f.write(content)
-    ok(f"{sensor_path} berhasil dibuat")
+    ok("sensors.add.xml successfully generated")
 
 def build_config():
-    console.print("[bold cyan][2.5/3][/bold cyan] Membuat file konfigurasi SUMO...")
+    console.print("[bold cyan][2.5/3][/bold cyan] Generating SUMO configuration config file...")
     content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/sumoConfiguration.xsd">
@@ -218,5 +218,5 @@ def build_config():
     config_path = os.path.join(BUILD_DIR, "config.sumocfg")
     with open(config_path, "w", encoding="utf-8") as f:
         f.write(content)
-    ok(f"{config_path} berhasil dibuat")
-    ok("folder output/ disiapkan")
+    ok("config.sumocfg successfully generated")
+    ok("output/ analytics folder prepared")
