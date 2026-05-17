@@ -152,6 +152,21 @@ simulasi-perempatan/
 
 ---
 
+## Creators
+
+This project was collaboratively created by the following team members:
+
+- **Muhammad La'azidannak Rusda**
+- **Arvia Faustina Ardhan**
+- **Satrio Putra Agustin**
+- **Enggar Prabowo**
+
+All listed creators retain ownership of their respective original contributions made to this project.
+
+Internal collaboration rights and future commercialization discussions are governed by the team’s shared internal agreement.
+
+---
+
 ## License & Contribution Rules
 
 This project is **dual-licensed** to protect our research while enabling commercial use:
