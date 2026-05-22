@@ -52,9 +52,9 @@ class TimeExtensionController:
         else:
             # Single mode (incoming): each direction operates independently
             self.direction_phases = {
-                "N": {"green": 0, "yellow": 1},
+                "S": {"green": 0, "yellow": 1},
                 "E": {"green": 2, "yellow": 3},
-                "S": {"green": 4, "yellow": 5},
+                "N": {"green": 4, "yellow": 5},
                 "W": {"green": 6, "yellow": 7}
             }
             console.print("  [STATUS] TLS Detection: Single mode (incoming) automatically detected.")

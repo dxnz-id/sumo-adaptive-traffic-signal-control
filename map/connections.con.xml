@@ -51,21 +51,25 @@
     <!-- === CENTER (Lampu Merah: Lurus & Kanan) === -->
     <!-- Utara -->
     <connection from="north_in_2" to="south_out_1" fromLane="0" toLane="0"/>
+    <connection from="north_in_2" to="west_out_1"  fromLane="0" toLane="0"/>
     <connection from="north_in_2" to="south_out_1" fromLane="1" toLane="1"/>
-    <connection from="north_in_2" to="west_out_1"  fromLane="1" toLane="1"/> <!-- Kanan dari lajur median -->
+    <connection from="north_in_2" to="west_out_1"  fromLane="1" toLane="1"/>
 
     <!-- Selatan -->
     <connection from="south_in_2" to="north_out_1" fromLane="0" toLane="0"/>
+    <connection from="south_in_2" to="east_out_1"  fromLane="0" toLane="0"/>
     <connection from="south_in_2" to="north_out_1" fromLane="1" toLane="1"/>
     <connection from="south_in_2" to="east_out_1"  fromLane="1" toLane="1"/>
 
     <!-- Timur -->
     <connection from="east_in_2"  to="west_out_1"  fromLane="0" toLane="0"/>
+    <connection from="east_in_2"  to="north_out_1" fromLane="0" toLane="0"/>
     <connection from="east_in_2"  to="west_out_1"  fromLane="1" toLane="1"/>
     <connection from="east_in_2"  to="north_out_1" fromLane="1" toLane="1"/>
 
     <!-- Barat -->
     <connection from="west_in_2"  to="east_out_1"  fromLane="0" toLane="0"/>
+    <connection from="west_in_2"  to="south_out_1" fromLane="0" toLane="0"/>
     <connection from="west_in_2"  to="east_out_1"  fromLane="1" toLane="1"/>
     <connection from="west_in_2"  to="south_out_1" fromLane="1" toLane="1"/>
 </connections>

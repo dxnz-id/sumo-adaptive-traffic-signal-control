@@ -137,7 +137,7 @@ def build_routes(orderliness="orderly"):
         vehicle.set("type",        vtype_id)
         vehicle.set("route",       route_ids[(direction, move)])
         vehicle.set("depart",      str(depart))
-        vehicle.set("departLane",  "random")
+        vehicle.set("departLane",  "best")
         vehicle.set("departSpeed", "random")
         veh_id += 1
 
