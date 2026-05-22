@@ -62,6 +62,17 @@ def get_congestion_from_cli():
         
         use_adaptive = adaptive_choice != "2"
         
+        # 5. Simulation Speed Toggle via Questionary
+        speed_choice = questionary.select(
+            "Run simulation as fast as possible (Maximum CPU speed)?",
+            choices=[
+                questionary.Choice("No (Real-time speed / 50ms delay per step)", value="2"),
+                questionary.Choice("Yes (No delay / maximum speed)", value="1"),
+            ]
+        ).ask()
+        
+        run_fast = speed_choice == "1"
+        
     except Exception:
         # FALLBACK: For non-interactive terminals, output panels, or IDE environments
         console.print("[dim]Note: Non-interactive terminal detected, switching to standard text inputs...[/dim]\n")
@@ -114,6 +125,14 @@ def get_congestion_from_cli():
         adaptive_choice = Prompt.ask("Select Mode", choices=["1", "2"], default="1")
         use_adaptive = adaptive_choice != "2"
 
+        # 5. Simulation Speed Toggle
+        console.print("\nRun simulation as fast as possible (Maximum CPU speed)?")
+        console.print(" [1] Yes (No delay / maximum speed)")
+        console.print(" [2] No (Real-time speed / 50ms delay per step)")
+        
+        speed_choice = Prompt.ask("Select Speed Mode", choices=["1", "2"], default="2")
+        run_fast = speed_choice == "1"
+
     # Print Configuration Summary
     console.print()
     console.print("[bold green]SIMULATION CONFIGURATION:[/bold green]")
@@ -121,6 +140,7 @@ def get_congestion_from_cli():
     console.print(f"  • TLS Cycle Mode       : [cyan]{'SINGLE' if tls_layout == 'incoming' else 'DUAL'}[/cyan]")
     console.print(f"  • Road Orderliness     : [green]{orderliness.upper()}[/green]")
     console.print(f"  • Adaptive Algorithm   : [{'green' if use_adaptive else 'red'}]{'ENABLED' if use_adaptive else 'DISABLED (Fixed-Time)'}[/{'green' if use_adaptive else 'red'}]")
+    console.print(f"  • Simulation Speed     : [magenta]{'MAXIMUM SPEED (No Delay)' if run_fast else 'REAL-TIME SPEED (50ms delay)'}[/magenta]")
     console.print()
         
-    return selected, tls_layout, orderliness, use_adaptive
+    return selected, tls_layout, orderliness, use_adaptive, run_fast

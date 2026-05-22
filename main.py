@@ -29,13 +29,14 @@ if sys.platform == "win32":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore
 
-def run_sumo_gui(use_adaptive=True):
+def run_sumo_gui(use_adaptive=True, congested_list=None, run_fast=False):
     console.print("[bold cyan][3/3][/bold cyan] Launching sumo-gui via TraCI...")
     sumo_gui_bin = find_exe("sumo-gui.exe")
     config_path = os.path.join(BUILD_DIR, "config.sumocfg")
     
-    # Run TraCI
-    cmd = [sumo_gui_bin, "-c", config_path, "--delay", "50", "--start", "--quit-on-end"]
+    # Run TraCI (set delay to 0 for maximum CPU speed, 50ms for normal mode)
+    delay_val = "0" if run_fast else "50"
+    cmd = [sumo_gui_bin, "-c", config_path, "--delay", delay_val, "--start", "--quit-on-end"]
     console.print(f"  -> [dim]{' '.join(cmd)}[/dim]\n")
     
     traci.start(cmd)
@@ -65,6 +66,11 @@ def run_sumo_gui(use_adaptive=True):
             traci.close()
         except:
             pass
+        
+        # 4. Generate post-simulation reports
+        mode_label = "Adaptive-Control" if use_adaptive else "Fixed-Time-Program"
+        from src.analyzer import print_simulation_report
+        print_simulation_report(mode_label=mode_label, congested=congested_list)
 
 if __name__ == "__main__":
     try:
@@ -72,7 +78,7 @@ if __name__ == "__main__":
         os.makedirs(BUILD_DIR, exist_ok=True)
 
         # 1. Fetch congestion, TLS layout, driver orderliness, and adaptive mode inputs from CLI
-        congested_list, tls_layout, orderliness, use_adaptive = get_congestion_from_cli()
+        congested_list, tls_layout, orderliness, use_adaptive, run_fast = get_congestion_from_cli()
         set_traffic_volumes(congested_list)
 
         # 2. Build SUMO XML infrastructure & network configuration files
@@ -82,7 +88,7 @@ if __name__ == "__main__":
         build_config()
         
         # 3. Launch execution GUI
-        run_sumo_gui(use_adaptive)
+        run_sumo_gui(use_adaptive, congested_list, run_fast)
         
     except KeyboardInterrupt:
         console.print("\n\n[bold yellow][INFO][/bold yellow] Simulation cancelled by user (Ctrl+C).")
