@@ -203,3 +203,173 @@ class TimeExtensionController:
                 traci.poi.setType(poi_id, combined_text)
             except:
                 pass
+
+
+class FixedTimeController:
+    """Passive controller that displays countdown timers for SUMO's built-in fixed-time TLS program.
+    Does NOT override or modify any traffic light phases — purely read-only GUI overlay."""
+
+    def __init__(self, tls_id="center"):
+        self.tls_id = tls_id
+
+        # Read full TLS program phases
+        try:
+            logics = traci.trafficlight.getAllProgramLogics(self.tls_id)
+            self.phases = logics[0].phases if logics else []
+        except Exception as e:
+            console.print(f"[bold yellow][WARNING][/bold yellow] Failed to read TLS program: {e}")
+            self.phases = []
+
+        self.num_phases = len(self.phases)
+
+        # Map link indices to directions by inspecting controlled connections
+        self.direction_links = {"N": [], "S": [], "E": [], "W": []}
+        try:
+            controlled = traci.trafficlight.getControlledLinks(self.tls_id)
+            for idx, links in enumerate(controlled):
+                if links:
+                    incoming_lane = links[0][0]
+                    if "north" in incoming_lane:
+                        self.direction_links["N"].append(idx)
+                    elif "south" in incoming_lane:
+                        self.direction_links["S"].append(idx)
+                    elif "east" in incoming_lane:
+                        self.direction_links["E"].append(idx)
+                    elif "west" in incoming_lane:
+                        self.direction_links["W"].append(idx)
+        except Exception as e:
+            console.print(f"[bold yellow][WARNING][/bold yellow] Failed to read TLS links: {e}")
+
+        # Precompute total red duration per direction (constant for fixed-time programs)
+        self._total_red_cache = {}
+        for d in ["N", "S", "E", "W"]:
+            self._total_red_cache[d] = self._calculate_total_red(d)
+
+        # Camera sensors for queue count display
+        self.cams = {
+            "N": ["cam_N_0", "cam_N_1"],
+            "S": ["cam_S_0", "cam_S_1"],
+            "W": ["cam_W_0", "cam_W_1"],
+            "E": ["cam_E_0", "cam_E_1"]
+        }
+
+        # POI positions (same layout as adaptive controller)
+        try:
+            cx, cy = traci.junction.getPosition(self.tls_id)
+        except:
+            cx, cy = 400.0, 400.0
+
+        self.poi_positions = {
+            "timer_N": (cx + 10.0, cy + 30.0),
+            "timer_S": (cx - 10.0, cy - 30.0),
+            "timer_W": (cx - 30.0, cy + 10.0),
+            "timer_E": (cx + 30.0, cy - 10.0)
+        }
+
+        for poi_id, (px, py) in self.poi_positions.items():
+            try:
+                traci.poi.add(poi_id, x=px, y=py, color=(0, 0, 0, 255), poiType="0", width=0.1, height=0.1)
+            except:
+                pass
+
+        console.print("  [STATUS] Fixed-time TLS: Countdown timer overlay active (read-only, no phase override).")
+
+    def step(self, step_length=0.1):
+        """Read SUMO's current TLS state and refresh POI countdown labels each tick."""
+        self._update_gui_pois()
+
+    def _is_green_in_state(self, state_string, direction):
+        """Check if any controlled link for the direction is green in a phase state string."""
+        for idx in self.direction_links[direction]:
+            if idx < len(state_string) and state_string[idx] in ('G', 'g'):
+                return True
+        return False
+
+    def _is_yellow_in_state(self, state_string, direction):
+        """Check if any controlled link for the direction is yellow in a phase state string."""
+        for idx in self.direction_links[direction]:
+            if idx < len(state_string) and state_string[idx] in ('y', 'Y'):
+                return True
+        return False
+
+    def _calculate_total_red(self, direction):
+        """Calculate the total red wait duration for a direction across one full TLS cycle."""
+        if self.num_phases == 0:
+            return 0.0
+
+        # Find the first phase where this direction is green
+        green_idx = None
+        for i in range(self.num_phases):
+            if self._is_green_in_state(self.phases[i].state, direction):
+                green_idx = i
+                break
+
+        if green_idx is None:
+            return sum(p.duration for p in self.phases)
+
+        # Walk forward from green, skip consecutive green/yellow phases for this direction
+        last_active_idx = green_idx
+        idx = (green_idx + 1) % self.num_phases
+        while idx != green_idx:
+            s = self.phases[idx].state
+            if self._is_green_in_state(s, direction) or self._is_yellow_in_state(s, direction):
+                last_active_idx = idx
+                idx = (idx + 1) % self.num_phases
+            else:
+                break
+
+        # Sum durations of all phases between end of active and start of next green
+        total = 0.0
+        idx = (last_active_idx + 1) % self.num_phases
+        while idx != green_idx:
+            total += self.phases[idx].duration
+            idx = (idx + 1) % self.num_phases
+
+        return total
+
+    def _get_timer_text(self, direction):
+        """Calculate countdown text by reading SUMO's current TLS state (read-only)."""
+        try:
+            current_phase_idx = traci.trafficlight.getPhase(self.tls_id)
+            next_switch = traci.trafficlight.getNextSwitch(self.tls_id)
+            sim_time = traci.simulation.getTime()
+            time_remaining = max(0.0, next_switch - sim_time)
+            current_state = self.phases[current_phase_idx].state if current_phase_idx < self.num_phases else ""
+            phase_dur = self.phases[current_phase_idx].duration if current_phase_idx < self.num_phases else 0
+        except:
+            return "N/A"
+
+        if self._is_green_in_state(current_state, direction):
+            return f"Green: {int(time_remaining)}s/{int(phase_dur)}s"
+        elif self._is_yellow_in_state(current_state, direction):
+            return f"Yellow: {int(time_remaining)}s/{int(phase_dur)}s"
+        else:
+            # Red: calculate remaining wait until this direction's next green
+            wait = time_remaining
+            idx = (current_phase_idx + 1) % self.num_phases
+            for _ in range(self.num_phases):
+                if self._is_green_in_state(self.phases[idx].state, direction):
+                    break
+                wait += self.phases[idx].duration
+                idx = (idx + 1) % self.num_phases
+
+            total_red = self._total_red_cache.get(direction, 0.0)
+            return f"Red: {int(wait)}s/{int(total_red)}s"
+
+    def _update_gui_pois(self):
+        """Refresh countdown timers and vehicle queue length texts in SUMO GUI."""
+        for poi_id in self.poi_positions.keys():
+            dir_key = poi_id.split("_")[1]
+
+            timer_text = self._get_timer_text(dir_key)
+
+            try:
+                count = sum(traci.lanearea.getJamLengthVehicle(cam) for cam in self.cams[dir_key])
+            except:
+                count = 0
+
+            combined_text = f"[{timer_text} | Queue: {count}]"
+            try:
+                traci.poi.setType(poi_id, combined_text)
+            except:
+                pass

@@ -20,7 +20,7 @@ import traci
 from src.config import BUILD_DIR, set_traffic_volumes
 from src.cli import get_congestion_from_cli
 from src.generator import find_exe, build_network, build_routes, build_sensors, build_config
-from src.controller import TimeExtensionController
+from src.controller import TimeExtensionController, FixedTimeController
 
 console = Console()
 
@@ -29,7 +29,7 @@ if sys.platform == "win32":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore
 
-def run_sumo_gui():
+def run_sumo_gui(use_adaptive=True):
     console.print("[bold cyan][3/3][/bold cyan] Launching sumo-gui via TraCI...")
     sumo_gui_bin = find_exe("sumo-gui.exe")
     config_path = os.path.join(BUILD_DIR, "config.sumocfg")
@@ -40,17 +40,22 @@ def run_sumo_gui():
     
     traci.start(cmd)
     console.print("  [green][OK][/green] TraCI and sumo-gui launched successfully!")
-    console.print("  [green][STATUS][/green] Simulation running. Adaptive lights controlled dynamically.\n")
     
-    # Initialize adaptive traffic light controller (Time Extension & Phase Skipping)
-    # POI timer and queue overlays are automatically drawn and updated by the controller
-    controller = TimeExtensionController(tls_id="center")
+    if use_adaptive:
+        console.print("  [green][STATUS][/green] Simulation running. Adaptive lights controlled dynamically.\n")
+        # Initialize adaptive traffic light controller (Time Extension & Phase Skipping)
+        # POI timer and queue overlays are automatically drawn and updated by the controller
+        controller = TimeExtensionController(tls_id="center")
+    else:
+        console.print("  [yellow][STATUS][/yellow] Simulation running. Using SUMO built-in fixed-time program (no adaptive control).\n")
+        # Initialize passive read-only controller for countdown timer overlay only
+        controller = FixedTimeController(tls_id="center")
 
     try:
         while traci.simulation.getMinExpectedNumber() > 0:
             traci.simulationStep()
             
-            # Execute adaptive controller logic tick (including POI updates)
+            # Execute controller logic tick (adaptive or fixed-time countdown overlay)
             controller.step(step_length=0.1)
                 
     except (traci.exceptions.FatalTraCIError, KeyboardInterrupt, SystemExit):
@@ -66,8 +71,8 @@ if __name__ == "__main__":
         os.chdir(os.path.dirname(os.path.abspath(__file__)))
         os.makedirs(BUILD_DIR, exist_ok=True)
 
-        # 1. Fetch congestion, TLS layout, and driver orderliness inputs from CLI
-        congested_list, tls_layout, orderliness = get_congestion_from_cli()
+        # 1. Fetch congestion, TLS layout, driver orderliness, and adaptive mode inputs from CLI
+        congested_list, tls_layout, orderliness, use_adaptive = get_congestion_from_cli()
         set_traffic_volumes(congested_list)
 
         # 2. Build SUMO XML infrastructure & network configuration files
@@ -77,7 +82,7 @@ if __name__ == "__main__":
         build_config()
         
         # 3. Launch execution GUI
-        run_sumo_gui()
+        run_sumo_gui(use_adaptive)
         
     except KeyboardInterrupt:
         console.print("\n\n[bold yellow][INFO][/bold yellow] Simulation cancelled by user (Ctrl+C).")

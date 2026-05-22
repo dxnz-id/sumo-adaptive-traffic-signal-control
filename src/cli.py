@@ -51,6 +51,17 @@ def get_congestion_from_cli():
         
         orderliness = "orderly" if ord_choice != "2" else "chaotic"
         
+        # 4. Adaptive Algorithm Toggle via Questionary
+        adaptive_choice = questionary.select(
+            "Enable Adaptive Traffic Light Algorithm?",
+            choices=[
+                questionary.Choice("Yes (Time Extension & Phase Skipping)", value="1"),
+                questionary.Choice("No (Use SUMO built-in fixed-time program)", value="2"),
+            ]
+        ).ask()
+        
+        use_adaptive = adaptive_choice != "2"
+        
     except Exception:
         # FALLBACK: For non-interactive terminals, output panels, or IDE environments
         console.print("[dim]Note: Non-interactive terminal detected, switching to standard text inputs...[/dim]\n")
@@ -94,13 +105,22 @@ def get_congestion_from_cli():
         
         ord_choice = Prompt.ask("Select Behavior", choices=["1", "2"], default="1")
         orderliness = "orderly" if ord_choice != "2" else "chaotic"
+        
+        # 4. Adaptive Algorithm Toggle
+        console.print("\nEnable Adaptive Traffic Light Algorithm?")
+        console.print(" [1] Yes (Time Extension & Phase Skipping)")
+        console.print(" [2] No (Use SUMO built-in fixed-time program)")
+        
+        adaptive_choice = Prompt.ask("Select Mode", choices=["1", "2"], default="1")
+        use_adaptive = adaptive_choice != "2"
 
     # Print Configuration Summary
     console.print()
     console.print("[bold green]SIMULATION CONFIGURATION:[/bold green]")
-    console.print(f"  • Congestion Status : [yellow]{'CONGESTED (' + ', '.join([s.capitalize() for s in selected]) + ')' if selected else 'NORMAL'}[/yellow]")
-    console.print(f"  • TLS Cycle Mode     : [cyan]{'SINGLE' if tls_layout == 'incoming' else 'DUAL'}[/cyan]")
-    console.print(f"  • Road Orderliness  : [green]{orderliness.upper()}[/green]")
+    console.print(f"  • Congestion Status    : [yellow]{'CONGESTED (' + ', '.join([s.capitalize() for s in selected]) + ')' if selected else 'NORMAL'}[/yellow]")
+    console.print(f"  • TLS Cycle Mode       : [cyan]{'SINGLE' if tls_layout == 'incoming' else 'DUAL'}[/cyan]")
+    console.print(f"  • Road Orderliness     : [green]{orderliness.upper()}[/green]")
+    console.print(f"  • Adaptive Algorithm   : [{'green' if use_adaptive else 'red'}]{'ENABLED' if use_adaptive else 'DISABLED (Fixed-Time)'}[/{'green' if use_adaptive else 'red'}]")
     console.print()
         
-    return selected, tls_layout, orderliness
+    return selected, tls_layout, orderliness, use_adaptive
